@@ -39,6 +39,12 @@
         <meta-data
             android:name="com.amap.api.v2.apikey"
             android:value="YOUR_AMAP_ANDROID_KEY" />
+        <!-- 关闭 Impeller（回退 Skia 渲染）：Flutter 3.35 默认 Impeller 在部分
+             设备上与高德 3D 地图的纹理平台视图冲突，创建地图视图时 NPE，
+             导致地图不显示/闪退。社区标准 workaround。 -->
+        <meta-data
+            android:name="io.flutter.embedding.android.EnableImpeller"
+            android:value="false" />
 
         <activity
             android:name=".MainActivity"
