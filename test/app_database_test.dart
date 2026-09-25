@@ -222,8 +222,160 @@ void main() {
   });
 
   group('迁移版本骨架', () {
-    test('dbVersion 为 1（升级时在 onUpgrade 增加分支）', () {
-      expect(AppDatabase.dbVersion, 1);
+    test('dbVersion 为 2（升级时在 onUpgrade 增加分支）', () {
+      expect(AppDatabase.dbVersion, 2);
+    });
+  });
+
+  group('photo 事件 DAO', () {
+    test('photo 事件读写往返（photoPath 持久化 + event_count 累计）', () async {
+      final t = await db.insertTrack(mkTrack(DateTime(2026, 9, 25, 10)));
+      final base = DateTime(2026, 9, 25, 10, 30);
+
+      final e = await db.insertEvent(DriveEvent(
+        trackId: t.id!,
+        timestamp: base,
+        type: DriveEventType.photo,
+        latitude: 39.92,
+        longitude: 116.41,
+        photoPath:
+            '/data/user/0/app/documents/photos/${t.id}/${base.millisecondsSinceEpoch}.jpg',
+      ));
+      expect(e.id, isNotNull);
+
+      final events = await db.eventsForTrack(t.id!);
+      expect(events.single.type, DriveEventType.photo);
+      expect(events.single.photoPath,
+          '/data/user/0/app/documents/photos/${t.id}/${base.millisecondsSinceEpoch}.jpg');
+      expect(events.single.latitude, 39.92);
+      expect(events.single.degraded, isFalse);
+      // photo 也计入事件数
+      expect((await db.getTrack(t.id!))!.eventCount, 1);
+    });
+
+    test('photo 事件无 GPS 时坐标 null + degraded 往返', () async {
+      final t = await db.insertTrack(mkTrack(DateTime(2026, 9, 25)));
+      await db.insertEvent(DriveEvent(
+        trackId: t.id!,
+        timestamp: DateTime(2026, 9, 25, 10, 30),
+        type: DriveEventType.photo,
+        degraded: true,
+        note: '无定位信号',
+        photoPath: '/tmp/x/123.jpg',
+      ));
+
+      final e = (await db.eventsForTrack(t.id!)).single;
+      expect(e.latitude, isNull);
+      expect(e.longitude, isNull);
+      expect(e.degraded, isTrue);
+      expect(e.note, '无定位信号');
+      expect(e.photoPath, '/tmp/x/123.jpg');
+    });
+  });
+
+  group('v1→v2 迁移', () {
+    test('先建 v1 库插老数据再迁移：photo_path 列新增、老数据零丢失', () async {
+      final path =
+          '${Directory.systemTemp.path}/drive_recorder_migration_${DateTime.now().millisecondsSinceEpoch}.db';
+      addTearDown(() async {
+        final f = File(File(path).resolveSymbolicLinksSync());
+        if (await f.exists()) await f.delete();
+      });
+
+      // 1. 手工建 v1 库（结构 = 迁移前的 events 表，无 photo_path）
+      final v1 = await factory.openDatabase(
+        path,
+        options: OpenDatabaseOptions(
+          version: 1,
+          onCreate: (db, _) async {
+            await db.execute('''
+              CREATE TABLE tracks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                start_time INTEGER NOT NULL,
+                end_time INTEGER,
+                point_count INTEGER NOT NULL DEFAULT 0,
+                event_count INTEGER NOT NULL DEFAULT 0,
+                distance_meters REAL NOT NULL DEFAULT 0,
+                source TEXT NOT NULL DEFAULT 'manual',
+                name TEXT
+              )
+            ''');
+            await db.execute('''
+              CREATE TABLE events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                track_id INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+                timestamp INTEGER NOT NULL,
+                type TEXT NOT NULL,
+                peak_intensity REAL,
+                latitude REAL,
+                longitude REAL,
+                degraded INTEGER NOT NULL DEFAULT 0,
+                track_point_id INTEGER,
+                note TEXT
+              )
+            ''');
+          },
+        ),
+      );
+      final ts = DateTime(2026, 9, 24, 9).millisecondsSinceEpoch;
+      final trackId = await v1.insert('tracks', {
+        'start_time': ts,
+        'point_count': 10,
+        'event_count': 2,
+        'distance_meters': 1200.5,
+        'source': 'manual',
+        'name': 'v1 老轨迹',
+      });
+      await v1.insert('events', {
+        'track_id': trackId,
+        'timestamp': ts + 60000,
+        'type': 'braking',
+        'peak_intensity': -4.2,
+        'latitude': 39.9,
+        'longitude': 116.4,
+        'degraded': 0,
+      });
+      await v1.insert('events', {
+        'track_id': trackId,
+        'timestamp': ts + 120000,
+        'type': 'manual',
+        'degraded': 1,
+        'note': '无定位信号',
+      });
+      await v1.close();
+
+      // 2. 用 AppDatabase 重开：应触发 onUpgrade 1→2
+      final db2 = await AppDatabase.open(path: path, factoryOverride: factory);
+
+      // 老轨迹零丢失
+      final track = await db2.getTrack(trackId);
+      expect(track!.name, 'v1 老轨迹');
+      expect(track.pointCount, 10);
+      expect(track.eventCount, 2);
+
+      // 老事件零丢失（photoPath 为 null）
+      final oldEvents = await db2.eventsForTrack(trackId);
+      expect(oldEvents.length, 2);
+      expect(oldEvents.first.type, DriveEventType.braking);
+      expect(oldEvents.first.peakIntensity, -4.2);
+      expect(oldEvents.every((e) => e.photoPath == null), isTrue);
+
+      // 3. 新增 photo_path 列可写
+      await db2.insertEvent(DriveEvent(
+        trackId: trackId,
+        timestamp: DateTime(2026, 9, 24, 9, 5),
+        type: DriveEventType.photo,
+        latitude: 39.91,
+        longitude: 116.41,
+        photoPath: '/docs/photos/$trackId/123.jpg',
+      ));
+      final events = await db2.eventsForTrack(trackId);
+      expect(events.length, 3);
+      expect(
+          events.last.photoPath, '/docs/photos/$trackId/123.jpg');
+      expect((await db2.getTrack(trackId))!.eventCount, 3);
+
+      await db2.close();
     });
   });
 }

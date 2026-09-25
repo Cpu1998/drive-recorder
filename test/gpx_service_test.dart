@@ -117,4 +117,47 @@ void main() {
   test('里程写入 desc', () {
     expect(gpx, contains('1.2 km'));
   });
+
+  test('photo 事件输出为 wpt：name=📷 拍照点、desc 含照片文件名、不含二进制', () {
+    final out = GpxService().build(
+      track: _track(),
+      points: _points(),
+      events: [
+        DriveEvent(
+          id: 9,
+          trackId: 7,
+          timestamp: DateTime(2026, 9, 25, 10, 47, 0),
+          type: DriveEventType.photo,
+          latitude: 39.912,
+          longitude: 116.401,
+          photoPath: '/docs/photos/7/1758779220000.jpg',
+        ),
+        // 无坐标的 photo 事件：不输出 wpt，但计入统计
+        DriveEvent(
+          id: 10,
+          trackId: 7,
+          timestamp: DateTime(2026, 9, 25, 10, 48, 0),
+          type: DriveEventType.photo,
+          degraded: true,
+          note: '无定位信号',
+          photoPath: '/docs/photos/7/1758779280000.jpg',
+        ),
+      ],
+    );
+
+    // 有坐标的 photo → wpt
+    expect(out, contains('<wpt lat="39.912000" lon="116.401000">'));
+    expect(out, contains('<name>📷 拍照点</name>'));
+    expect(out, contains('照片 1758779220000.jpg'));
+    expect(out, contains('<time>2026-09-25T02:47:00.000Z</time>'));
+
+    // 仅 1 个 wpt（无坐标的不输出）
+    expect(RegExp('<wpt ').allMatches(out).length, 1);
+
+    // 不内嵌图片二进制：输出长度远小于典型照片体积
+    expect(out.length, lessThan(2000));
+
+    // 统计计入拍照次数（含无坐标的）
+    expect(out, contains('拍照 2 次'));
+  });
 }

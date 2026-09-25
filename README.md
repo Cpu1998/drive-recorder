@@ -3,7 +3,7 @@
 Flutter 行车轨迹记录 App（Android 为主线，iOS 已留好配置与说明）。
 
 - 高德地图 SDK 渲染（`amap_map`）+ 高德定位 SDK 后台连续定位
-- 手动事件打点 / 急刹·碰撞自动识别（加速度传感器 50Hz）
+- 手动事件打点 / 拍照事件（📷 原生侧压缩长边≤1920·q85）/ 急刹·碰撞自动识别（加速度传感器 50Hz）
 - 蓝牙车机自动开始/停止记录（经典蓝牙，30s 断开宽限）
 - SQLite 本地存储（tracks / track_points / events），本地优先
 - GPX 1.1 导出与分享
@@ -159,9 +159,10 @@ compileSdk 29、jcenter），在 AGP 8 下无法配置。本机构建前已打�
 `permission_handler_android` 需要 AGP 9 工具链，与 Flutter 3.35 不兼容。
 
 ## 7. 数据与导出
-
-- SQLite 三张表：`tracks`（会话）/ `track_points`（点）/ `events`（事件），
-  批量事务写入，迁移走 `AppDatabase._onUpgrade`（当前 v1）
+- SQLite 三张表：`tracks`（会话）/ `track_points`（点）/ `events`（事件，v2 起 photo 事件带 `photo_path`），
+  批量事务写入，迁移走 `AppDatabase._onUpgrade`（当前 v2）
+- 拍照事件：照片存应用文档目录 `photos/<trackId>/<timestamp>.jpg`（与缓存隔离，避免系统清理误删）；
+  详情页缩略图列表 + 全屏查看（InteractiveViewer 缩放）；删除轨迹时随级联清理（文件同步删除）
 - GPX 1.1：`trk/trkseg/trkpt(lat,lon,ele,time)`；有坐标的事件输出为
-  `wpt`（name=类型，desc=峰值/说明）；无坐标事件计入 `trk>desc` 统计
+  `wpt`（name=类型，desc=峰值/说明，photo 事件 name=📷 拍照点、desc 含照片文件名）；无坐标事件计入 `trk>desc` 统计
 - 分享用 share_plus（系统分享面板），同时可保存到应用文档目录
