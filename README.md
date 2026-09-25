@@ -143,6 +143,21 @@ flutter build apk --debug
 测试运行于 `sqflite_common_ffi`，Linux 宿主若无 `libsqlite3.so` 符号链接，
 测试内已 override 到 `libsqlite3.so.0`。
 
+### ⚠️ 构建注意事项：amap_flutter_location pub cache 补丁
+
+`amap_flutter_location 3.0.0` 的 android/build.gradle 太老（无 namespace、
+compileSdk 29、jcenter），在 AGP 8 下无法配置。本机构建前已打补丁
+（同目录留有 `.orig` 备份）：
+
+- `namespace 'com.amap.flutter.location'`、`compileSdkVersion 34`
+- 仓库换成 mavenCentral + 阿里云镜像
+
+若 `flutter pub cache repair` 后重新构建，需要重打（两端 cache 目录均需，
+以 `flutter build` 报错里的路径为准）。
+
+依赖版本说明：`permission_handler` 固定 `^12.0.1`，因为 14.x 的
+`permission_handler_android` 需要 AGP 9 工具链，与 Flutter 3.35 不兼容。
+
 ## 7. 数据与导出
 
 - SQLite 三张表：`tracks`（会话）/ `track_points`（点）/ `events`（事件），
