@@ -69,3 +69,8 @@ class AMapKeys {
   /// iOS Key：配置在 ios/Runner/Info.plist
   static const iosPlistPlaceholder = 'YOUR_AMAP_IOS_KEY';
 }
+
+/// 应用版本（与 pubspec version 同步维护；用于启动日志等展示）。
+class AppInfo {
+  static const String version = '1.3.3';
+}

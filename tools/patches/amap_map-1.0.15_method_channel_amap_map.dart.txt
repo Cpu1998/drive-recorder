@@ -11,6 +11,7 @@
 // distributed under the License is distributed on an "AS IS" BASIS,
 
 import 'dart:async';
+import 'dart:ui' show TextDirection;
 
 import 'package:x_amap_base/x_amap_base.dart';
 import 'package:amap_map/src/core/amap_flutter_platform.dart';
@@ -18,6 +19,7 @@ import 'package:amap_map/src/types/types.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/rendering.dart' show PlatformViewHitTestBehavior;
 import 'package:flutter/services.dart';
 import 'package:stream_transform/stream_transform.dart';
 
@@ -106,6 +108,7 @@ class MethodChannelAMapFlutterMap implements AMapFlutterPlatform {
       void Function(int id) onPlatformViewCreated) {
     if (defaultTargetPlatform == TargetPlatform.android) {
       creationParams['debugMode'] = kDebugMode;
+      debugPrint('AMAP_HC_PATCH_ACTIVE_V2_HC_MODE');
       // [本地补丁 2026-09-25] 原实现 AndroidView（纹理/TLHC 模式）在部分
       // 设备上创建视图时抛 PlatformException NullPointerException
       // （TextureAndroidViewController._sendCreateMessage → 引擎
@@ -115,7 +118,7 @@ class MethodChannelAMapFlutterMap implements AMapFlutterPlatform {
       return PlatformViewLink(
         viewType: VIEW_TYPE,
         surfaceFactory: (context, controller) => AndroidViewSurface(
-          controller: controller,
+          controller: controller as AndroidViewController,
           gestureRecognizers: gestureRecognizers,
           hitTestBehavior: PlatformViewHitTestBehavior.opaque,
         ),
@@ -123,14 +126,15 @@ class MethodChannelAMapFlutterMap implements AMapFlutterPlatform {
           final controller = PlatformViewsService.initSurfaceAndroidView(
             id: params.id,
             viewType: params.viewType,
+            layoutDirection: TextDirection.ltr,
+            creationParams: creationParams,
+            creationParamsCodec: const StandardMessageCodec(),
           );
           controller
             ..addOnPlatformViewCreatedListener(params.onPlatformViewCreated)
             ..create();
           return controller;
         },
-        creationParams: creationParams,
-        creationParamsCodec: const StandardMessageCodec(),
       );
     } else if (defaultTargetPlatform == TargetPlatform.iOS) {
       return UiKitView(

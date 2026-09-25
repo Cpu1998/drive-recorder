@@ -11,6 +11,7 @@ import 'services/bluetooth_car_service.dart';
 import 'package:amap_flutter_location/amap_flutter_location.dart';
 
 import 'services/app_logger.dart';
+import 'utils/constants.dart';
 import 'services/database/app_database.dart';
 import 'services/sample_track_seeder.dart';
 import 'services/settings_service.dart';
@@ -18,7 +19,7 @@ import 'services/sync/firestore_sync_service_impl.dart';
 
 Future<void> main() async {
   AppLogger.attachGlobalHandlers();
-  AppLogger.i('app', '进程启动 v1.3.0');
+  AppLogger.i('app', '进程启动 v${AppInfo.version}');
   WidgetsFlutterBinding.ensureInitialized();
 
   final db = await AppDatabase.open();

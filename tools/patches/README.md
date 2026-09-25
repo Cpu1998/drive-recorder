@@ -14,7 +14,7 @@ Composition），绕开纹理平台视图路径。
 **应用方式**（`flutter pub cache repair` 后需重打）：
 
 ```bash
-cp tools/patches/amap_map-1.0.15_method_channel_amap_map.dart \
+cp tools/patches/amap_map-1.0.15_method_channel_amap_map.dart.txt \
    ~/.pub-cache/hosted/pub.flutter-io.cn/amap_map-1.0.15/lib/src/core/method_channel_amap_map.dart
 ```
 
