@@ -48,11 +48,15 @@ class TrackMapView extends StatefulWidget {
   final List<TrackPoint> points;
   final List<DriveEvent> events;
 
+  /// 高德 Android Key（设置页配置，运行时注入）；空则走 manifest 内置。
+  final String? amapKey;
+
   const TrackMapView({
     super.key,
     required this.track,
     required this.points,
     required this.events,
+    this.amapKey,
   });
 
   @override
@@ -209,8 +213,14 @@ class _TrackMapViewState extends State<TrackMapView> {
     }
 
     // 按官方示例要求：在 AMapWidget 创建前完成初始化与合规声明
-    // （Android Key 走 AndroidManifest meta-data，这里不传 apiKey）
-    amap.AMapInitializer.init(context);
+    // 优先用设置页配置的 Key（运行时注入），否则走 manifest meta-data
+    final key = widget.amapKey ?? '';
+    amap.AMapInitializer.init(
+      context,
+      apiKey: key.isEmpty
+          ? null
+          : AMapApiKey(androidKey: key, iosKey: ''),
+    );
     amap.AMapInitializer.updatePrivacyAgree(
       const AMapPrivacyStatement(hasContains: true, hasShow: true, hasAgree: true),
     );

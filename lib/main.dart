@@ -8,6 +8,8 @@ import 'providers/recording_provider.dart';
 import 'providers/settings_provider.dart';
 import 'providers/tracks_provider.dart';
 import 'services/bluetooth_car_service.dart';
+import 'package:amap_flutter_location/amap_flutter_location.dart';
+
 import 'services/database/app_database.dart';
 import 'services/sample_track_seeder.dart';
 import 'services/settings_service.dart';
@@ -38,6 +40,13 @@ Future<void> main() async {
       address: settings.btDeviceAddress!,
     );
   }
+  // 高德定位 Key：设置页配置的 Key 在启动时注入定位 SDK（SDK 限制：
+  // 只能在创建定位客户端前设置，故放启动路径；地图 Key 则在地图组件内注入）
+  final amapKey = settings.amapKey;
+  if (amapKey.isNotEmpty) {
+    AMapFlutterLocation.setApiKey(amapKey, '');
+  }
+
   bluetooth.autoEnabled = settings.btAutoEnabled;
   try {
     await bluetooth.start();

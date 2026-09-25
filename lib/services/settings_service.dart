@@ -46,6 +46,10 @@ class SettingsService {
   Future<void> setSyncEnabled(bool v) =>
       prefs.setBool(PrefKeys.syncEnabled, v);
 
+  // —— 高德 Key（App 内配置）——
+  String get amapKey => prefs.getString(PrefKeys.amapKey) ?? '';
+  Future<void> setAmapKey(String v) => prefs.setString(PrefKeys.amapKey, v);
+
   // —— 高德隐私 ——
   bool get amapPrivacyAgreed =>
       prefs.getBool(PrefKeys.amapPrivacyAgreed) ?? false;

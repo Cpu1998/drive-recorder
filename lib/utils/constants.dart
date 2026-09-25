@@ -10,6 +10,9 @@ class PrefKeys {
   static const btDeviceAddress = 'bt_device_address';
   static const syncEnabled = 'sync_enabled';
   static const amapPrivacyAgreed = 'amap_privacy_agreed';
+
+  /// 高德 Android Key（App 内配置，运行时注入地图/定位 SDK）。
+  static const amapKey = 'amap_android_key';
 }
 
 /// 定位自适应频率。

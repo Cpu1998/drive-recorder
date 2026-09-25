@@ -55,16 +55,27 @@ android/app/src/main/kotlin/com/zhangkeyou/drive_recorder/
 
 ## 2. 高德 Key 配置（必做）
 
-Android 包名：`com.zhangkeyou.drive_recorder`。
+Android 包名：`com.zhangkeyou.drive_recorder`。当前发布包签名用的是调试证书，
+SHA1：`6E:34:F4:6E:3A:56:B6:6C:BB:E0:4F:FA:D1:8C:DF:26:2A:F3:4E:49`。
+
+### 方式一：App 内直接配置（推荐，无需重新打包）
 
 1. 到 [高德开放平台](https://console.amap.com/dev/key/app) 创建应用，添加 **Android** Key：
-   - 发布版 SHA1：`keytool -list -v -keystore <你的签名文件>` 取
-   - 调试版 SHA1：`keytool -list -v -keystore ~/.android/debug.keystore`（口令 android）
+   - 包名：`com.zhangkeyou.drive_recorder`
+   - SHA1：上面给出的指纹
+2. 打开 App → 设置 → 「高德地图 Key」→ 粘贴 Key → 保存 → 重启 App。
+
+> 地图 Key 在地图创建时注入，定位 Key 在 App 启动时注入，所以需要重启一次。
+
+### 方式二：打包时写死（开发者）
+
+1. 同上先创建 Key（SHA1 换成你自己的签名：
+   `keytool -list -v -keystore <你的签名文件>`）。
 2. 把 Key 填入 `android/app/src/main/AndroidManifest.xml`：
 
 ```xml
 <meta-data
-    android:name="com.amap.api.v2.androidkey"
+    android:name="com.amap.api.v2.apikey"
     android:value="YOUR_AMAP_ANDROID_KEY" />   <!-- 替换为你的 Key -->
 ```
 

@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 import '../models/drive_event.dart';
 import '../models/track.dart';
 import '../models/track_point.dart';
+import '../providers/settings_provider.dart';
 import '../providers/tracks_provider.dart';
 import '../services/gpx_service.dart';
 import '../utils/formatters.dart';
@@ -104,6 +105,7 @@ class _DetailScreenState extends State<DetailScreen> {
     final photoEvents = (_events ?? const <DriveEvent>[])
         .where((e) => e.type == DriveEventType.photo)
         .toList(growable: false);
+    final amapKey = context.watch<SettingsProvider>().amapKey;
     return Scaffold(
       appBar: AppBar(
         title: Text(_track?.name ?? '轨迹详情'),
@@ -132,6 +134,7 @@ class _DetailScreenState extends State<DetailScreen> {
                         track: _track!,
                         points: _points ?? const [],
                         events: _events ?? const [],
+                        amapKey: amapKey,
                       ),
                     ),
                     if ((_events ?? []).isNotEmpty)

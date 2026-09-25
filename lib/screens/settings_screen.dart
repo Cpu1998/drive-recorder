@@ -16,16 +16,89 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final _permissions = PermissionService();
+  final _amapKeyController = TextEditingController();
+  bool _amapKeyEdited = false;
+  bool _amapKeySynced = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _amapKeyController.addListener(() => _amapKeyEdited = true);
+  }
+
+  @override
+  void dispose() {
+    _amapKeyController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _saveAmapKey() async {
+    final key = _amapKeyController.text.trim();
+    await context.read<SettingsProvider>().setAmapKey(key);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(key.isEmpty ? '已清除高德 Key，重启 App 后生效' : '已保存，重启 App 后生效（定位 SDK 需启动时注入）'),
+      duration: const Duration(seconds: 3),
+    ));
+  }
 
   @override
   Widget build(BuildContext context) {
     final s = context.watch<SettingsProvider>();
     final btState = context.watch<BluetoothStateProvider>().state;
+    // 首次加载后同步已存的 Key 到输入框（用户未手动编辑时）
+    if (!_amapKeyEdited && !_amapKeySynced && s.amapKey.isNotEmpty) {
+      _amapKeyController.text = s.amapKey;
+      _amapKeySynced = true;
+    }
 
     return Scaffold(
       appBar: AppBar(title: const Text('设置')),
       body: ListView(
         children: [
+          // —— 高德 Key ——
+          _sectionHeader(context, '高德地图 Key'),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _amapKeyController,
+                        decoration: const InputDecoration(
+                          prefixIcon: Icon(Icons.vpn_key_outlined),
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                          labelText: 'Android Key',
+                          hintText: '32 位，在高德开放平台创建',
+                        ),
+                        onSubmitted: (_) => _saveAmapKey(),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton(
+                      onPressed: _saveAmapKey,
+                      child: const Text('保存'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '不填则用打包内置的占位 Key（地图/定位不可用）。\n'
+                  '申请：console.amap.com → 创建应用 → 添加 Android Key，\n'
+                  '包名 com.zhangkeyou.drive_recorder，SHA1 与包名见 README。\n'
+                  '保存后需重启 App 生效。',
+                  style: TextStyle(
+                      fontSize: 12, color: Theme.of(context).disabledColor),
+                ),
+              ],
+            ),
+          ),
+          const Divider(),
+
           // —— 事件检测阈值 ——
           _sectionHeader(context, '事件检测阈值'),
           ListTile(

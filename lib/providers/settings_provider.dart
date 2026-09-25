@@ -31,6 +31,10 @@ class SettingsProvider extends ChangeNotifier {
   String? _btDeviceAddress;
   String? get btDeviceAddress => _btDeviceAddress;
 
+  // —— 高德 Key ——
+  String _amapKey = '';
+  String get amapKey => _amapKey;
+
   // —— 同步 ——
   bool _syncEnabled = false;
   bool get syncEnabled => _syncEnabled;
@@ -45,6 +49,7 @@ class SettingsProvider extends ChangeNotifier {
     _btDeviceName = _settings.btDeviceName;
     _btDeviceAddress = _settings.btDeviceAddress;
     _syncEnabled = _settings.syncEnabled;
+    _amapKey = _settings.amapKey;
     notifyListeners();
   }
 
@@ -58,6 +63,12 @@ class SettingsProvider extends ChangeNotifier {
     _collisionThreshold = v;
     notifyListeners();
     await _settings.setCollisionThreshold(v);
+  }
+
+  Future<void> setAmapKey(String v) async {
+    _amapKey = v;
+    notifyListeners();
+    await _settings.setAmapKey(v);
   }
 
   Future<void> setBtAutoEnabled(bool v) async {
