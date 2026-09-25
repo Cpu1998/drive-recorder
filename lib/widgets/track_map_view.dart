@@ -156,6 +156,33 @@ class _TrackMapViewState extends State<TrackMapView> {
 
   @override
   Widget build(BuildContext context) {
+    // 关键防御：没有任何定位点的轨迹不创建地图（空点集 polyline 会导致
+    // 高德原生层崩溃，即“点开轨迹闪退”的根因），直接给用户可读的提示。
+    final located = widget.points.where((p) => p.hasFix).toList();
+    if (located.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.location_searching_outlined,
+                  size: 40, color: Theme.of(context).disabledColor),
+              const SizedBox(height: 8),
+              const Text('该轨迹没有定位点'),
+              const SizedBox(height: 4),
+              Text(
+                '可能原因：未配置高德 Android Key（定位服务不可用），'
+                '或全程无 GPS 信号。\n配置方法见 README「高德 Key 配置」。',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    fontSize: 12, color: Theme.of(context).disabledColor),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     if (!_privacyChecked) {
       return const Center(child: CircularProgressIndicator());
     }
