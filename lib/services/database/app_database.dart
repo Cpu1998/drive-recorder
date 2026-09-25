@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
@@ -22,14 +24,36 @@ class AppDatabase {
   /// 打开（或创建）数据库。
   ///
   /// [factoryOverride] 供桌面端单测注入 sqflite_common_ffi。
+  ///
+  /// 损坏自恢复：若打开失败（文件损坏/版本异常），把旧文件改名备份为
+  /// `*.corrupt-<ts>` 后重建新库——绝不让启动路径崩死（否则 App 将永远打不开）。
   static Future<AppDatabase> open({
     String? path,
     DatabaseFactory? factoryOverride,
   }) async {
-    final databasePath = path ??
-        p.join(await (factoryOverride ?? databaseFactory).getDatabasesPath(),
-            dbName);
-    final db = await (factoryOverride ?? databaseFactory).openDatabase(
+    final f = factoryOverride ?? databaseFactory;
+    final databasePath = path ?? p.join(await f.getDatabasesPath(), dbName);
+    try {
+      return AppDatabase._(await _open(f, databasePath));
+    } catch (e) {
+      final ts = DateTime.now().millisecondsSinceEpoch;
+      for (final suffix in ['', '-journal', '-wal', '-shm']) {
+        final src = '$databasePath$suffix';
+        if (!File(src).existsSync()) continue;
+        try {
+          File(src).renameSync('$src.corrupt-$ts');
+        } catch (_) {
+          // 改名失败（被占用等）：退回直接删除，保证能重建
+          await f.deleteDatabase(src);
+        }
+      }
+      return AppDatabase._(await _open(f, databasePath));
+    }
+  }
+
+  static Future<Database> _open(
+      DatabaseFactory f, String databasePath) async {
+    return f.openDatabase(
       databasePath,
       options: OpenDatabaseOptions(
         version: dbVersion,
@@ -37,7 +61,6 @@ class AppDatabase {
         onUpgrade: _onUpgrade,
       ),
     );
-    return AppDatabase._(db);
   }
 
   static Future<void> _onCreate(Database db, int version) async {
