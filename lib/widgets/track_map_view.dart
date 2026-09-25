@@ -102,6 +102,8 @@ class _TrackMapViewState extends State<TrackMapView> {
           (amap.BitmapDescriptor.hueOrange, '急刹'),
         DriveEventType.collision =>
           (amap.BitmapDescriptor.hueRed, '碰撞'),
+        DriveEventType.photo =>
+          (amap.BitmapDescriptor.hueRose, '📷 拍照点'),
       };
       final marker = amap.Marker(
         position: LatLng(e.latitude!, e.longitude!),

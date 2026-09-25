@@ -49,6 +49,7 @@ dependencies:
   amap_map: ^1.0.15
   vector_math: ^2.2.0
   x_amap_base: ^1.0.3
+  image_picker: ^1.2.2
 
 dev_dependencies:
   flutter_test:

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -34,6 +36,19 @@ class PermissionService {
     if (!scan.isGranted && !scan.isLimited) missing.add('蓝牙扫描');
 
     return PermissionResult(ok: missing.isEmpty, missing: missing);
+  }
+
+  /// 拍照所需：仅 iOS 需主动申请相机权限（Info.plist 已声明用途描述）；
+  /// Android 走相机 intent，无需本应用声明 CAMERA 权限。
+  Future<PermissionResult> ensureCameraPermission() async {
+    if (!Platform.isIOS) {
+      return const PermissionResult(ok: true, missing: []);
+    }
+    final camera = await Permission.camera.request();
+    if (camera.isGranted || camera.isLimited) {
+      return const PermissionResult(ok: true, missing: []);
+    }
+    return const PermissionResult(ok: false, missing: ['相机']);
   }
 }
 

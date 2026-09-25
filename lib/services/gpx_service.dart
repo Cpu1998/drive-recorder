@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:path/path.dart' as p;
 
 import '../models/drive_event.dart';
 import '../models/track.dart';
@@ -35,7 +36,7 @@ class GpxService {
     for (final e in events) {
       if (e.latitude == null || e.longitude == null) continue;
       b.writeln('  <wpt lat="${_fmt(e.latitude!)}" lon="${_fmt(e.longitude!)}">');
-      b.writeln('    <name>${_esc(e.type.label)}</name>');
+      b.writeln('    <name>${_esc(_wptName(e))}</name>');
       b.writeln(
           '    <desc>${_esc(_eventDesc(e))}</desc>');
       b.writeln('    <time>${_iso8601(e.timestamp)}</time>');
@@ -76,10 +77,19 @@ class GpxService {
 
   String _nameOf(Track track) => track.name ?? 'Track ${track.id}';
 
+  /// wpt 名称：photo 事件固定为「📷 拍照点」，其余用类型标签。
+  String _wptName(DriveEvent e) =>
+      e.type == DriveEventType.photo ? '📷 拍照点' : e.type.label;
+
   String _eventDesc(DriveEvent e) {
     final parts = <String>[e.type.label];
     if (e.peakIntensity != null) {
       parts.add('峰值 ${e.peakIntensity!.toStringAsFixed(1)} m/s²');
+    }
+    // photo 事件附带照片文件名（不含二进制，便于对照本地照片）
+    if (e.type == DriveEventType.photo &&
+        e.photoPath?.isNotEmpty == true) {
+      parts.add('照片 ${p.basename(e.photoPath!)}');
     }
     if (e.note?.isNotEmpty == true) parts.add(e.note!);
     if (e.degraded) parts.add('定位降级');
@@ -92,8 +102,9 @@ class GpxService {
     final collision =
         events.where((e) => e.type == DriveEventType.collision).length;
     final manual = events.where((e) => e.type == DriveEventType.manual).length;
+    final photo = events.where((e) => e.type == DriveEventType.photo).length;
     final parts = <String>[
-      '事件：急刹 $braking 次，碰撞 $collision 次，手动打点 $manual 次',
+      '事件：急刹 $braking 次，碰撞 $collision 次，手动打点 $manual 次，拍照 $photo 次',
       if (degradedPoints > 0) '无定位轨迹点 $degradedPoints 个（未含在轨迹中）',
       '里程 ${(track.distanceMeters / 1000).toStringAsFixed(1)} km',
     ];

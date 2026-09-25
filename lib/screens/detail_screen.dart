@@ -12,6 +12,7 @@ import '../models/track_point.dart';
 import '../providers/tracks_provider.dart';
 import '../services/gpx_service.dart';
 import '../utils/formatters.dart';
+import '../widgets/photo_gallery.dart';
 import '../widgets/track_map_view.dart';
 
 /// 详情页：
@@ -100,6 +101,9 @@ class _DetailScreenState extends State<DetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final photoEvents = (_events ?? const <DriveEvent>[])
+        .where((e) => e.type == DriveEventType.photo)
+        .toList(growable: false);
     return Scaffold(
       appBar: AppBar(
         title: Text(_track?.name ?? '轨迹详情'),
@@ -134,6 +138,12 @@ class _DetailScreenState extends State<DetailScreen> {
                       SizedBox(
                         height: 128,
                         child: _EventList(events: _events!),
+                      ),
+                    // 照片横向缩略图列表（仅有 photo 事件时出现）
+                    if (photoEvents.isNotEmpty)
+                      SizedBox(
+                        height: 150,
+                        child: PhotoStrip(photoEvents: photoEvents),
                       ),
                   ],
                 ),
@@ -212,6 +222,7 @@ class _EventList extends StatelessWidget {
                 DriveEventType.manual => (Icons.touch_app, Colors.blue),
                 DriveEventType.braking => (Icons.south_east, Colors.orange),
                 DriveEventType.collision => (Icons.warning, Colors.red),
+                DriveEventType.photo => (Icons.photo_camera, Colors.teal),
               };
               return Card(
                 child: Padding(

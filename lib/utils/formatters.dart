@@ -38,3 +38,11 @@ String defaultTrackName(DateTime start) {
   final mm = start.minute.toString().padLeft(2, '0');
   return '$m月$d日 $hh:$mm';
 }
+
+/// 时刻 → "14:05:32"（照片/事件卡片用）。
+String formatClock(DateTime t) {
+  final hh = t.hour.toString().padLeft(2, '0');
+  final mm = t.minute.toString().padLeft(2, '0');
+  final ss = t.second.toString().padLeft(2, '0');
+  return '$hh:$mm:$ss';
+}

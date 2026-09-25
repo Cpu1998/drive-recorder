@@ -61,6 +61,9 @@
 	<!-- 蓝牙：车机自动启停检测 -->
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>行车记录需要访问蓝牙以检测与车机的连接状态，自动开始/停止记录。</string>
+	<!-- 相机：行车途中拍摄现场照片，作为轨迹事件保存 -->
+	<key>NSCameraUsageDescription</key>
+	<string>行车记录需要使用相机在行驶途中拍摄现场照片，并作为照片事件关联到当前轨迹。</string>
 	<!-- 高德 iOS Key：在此处填入高德开放平台申请的 iOS Key（与 Android Key 分开申请）。
 	     未填则地图/定位功能不可用，但不影响编译。 -->
 	<key>com.amap.api.ioskey</key>

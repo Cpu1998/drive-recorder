@@ -79,22 +79,32 @@ class _RecordScreenState extends State<RecordScreen> {
                   ),
                 ),
 
-              // 大按钮：手动打点
+              // 大按钮：手动打点 + 拍照
               Expanded(
                 child: Center(
-                  child: _BigEventButton(
-                    enabled: recording,
-                    onTap: () async {
-                      final hasFix = rec.hasGpsFix;
-                      final ok = await rec.manualEvent();
-                      if (!context.mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                        content: Text(ok
-                            ? (hasFix ? '已打点 ✓（含当前坐标）' : '已打点 ✓（无定位信号，标记降级）')
-                            : '尚未开始记录，先点「开始记录」'),
-                        duration: const Duration(seconds: 2),
-                      ));
-                    },
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _BigEventButton(
+                        enabled: recording,
+                        onTap: () async {
+                          final hasFix = rec.hasGpsFix;
+                          final ok = await rec.manualEvent();
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                            content: Text(ok
+                                ? (hasFix ? '已打点 ✓（含当前坐标）' : '已打点 ✓（无定位信号，标记降级）')
+                                : '尚未开始记录，先点「开始记录」'),
+                            duration: const Duration(seconds: 2),
+                          ));
+                        },
+                      ),
+                      const SizedBox(width: 20),
+                      _CameraEventButton(
+                        enabled: recording,
+                        onTap: () => _takePhoto(rec),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -118,6 +128,33 @@ class _RecordScreenState extends State<RecordScreen> {
 
   String _sourceLabel(String? source) =>
       source == 'bluetooth' ? '车机自动' : '手动';
+
+  /// 拍照流程：权限检查 → 调起相机 → 照片落盘 + 写入 photo 事件。
+  /// 取消拍照静默返回，不打扰用户。
+  Future<void> _takePhoto(RecordingProvider rec) async {
+    final perm = await rec.permissions.ensureCameraPermission();
+    if (!perm.ok) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('缺少权限：${perm.missing.join('、')}，无法拍照'),
+        duration: const Duration(seconds: 2),
+      ));
+      return;
+    }
+
+    final path = await rec.photos.takePhoto();
+    if (path == null) return; // 用户取消
+
+    final hasFix = rec.hasGpsFix;
+    final ok = await rec.photoEvent(path);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(ok
+          ? (hasFix ? '已保存照片 ✓（含当前坐标）' : '已保存照片 ✓（无定位信号，标记降级）')
+          : '尚未开始记录，无法保存照片'),
+      duration: const Duration(seconds: 2),
+    ));
+  }
 }
 
 class _StatusCard extends StatelessWidget {
@@ -218,6 +255,54 @@ class _Metric extends StatelessWidget {
         const SizedBox(height: 2),
         Text(label, style: Theme.of(context).textTheme.bodySmall),
       ],
+    );
+  }
+}
+
+/// 拍照事件按钮：紧邻手动打点大按钮，仅记录中可用。
+class _CameraEventButton extends StatelessWidget {
+  final bool enabled;
+  final VoidCallback onTap;
+
+  const _CameraEventButton({required this.enabled, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Semantics(
+      button: true,
+      label: '拍照',
+      enabled: enabled,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Material(
+            shape: const CircleBorder(),
+            elevation: enabled ? 4 : 0,
+            color: enabled ? cs.secondaryContainer : cs.surfaceContainerHighest,
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: enabled ? onTap : null,
+              child: SizedBox(
+                width: 72,
+                height: 72,
+                child: Icon(
+                  Icons.photo_camera,
+                  size: 32,
+                  color: enabled ? cs.onSecondaryContainer : cs.outlineVariant,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '拍照',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: enabled ? null : cs.outline,
+                ),
+          ),
+        ],
+      ),
     );
   }
 }

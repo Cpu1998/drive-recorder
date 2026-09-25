@@ -10,6 +10,7 @@ import '../services/driving_event_detector.dart';
 import '../services/foreground_service.dart';
 import '../services/location_service.dart';
 import '../services/permission_service.dart';
+import '../services/photo_service.dart';
 import '../services/sensor_service.dart';
 import '../services/settings_service.dart';
 import '../utils/formatters.dart';
@@ -33,6 +34,7 @@ class RecordingProvider extends ChangeNotifier {
   final SensorService sensors;
   final ForegroundServiceController foreground;
   final PermissionService permissions;
+  final PhotoService photos;
 
   RecordingProvider({
     required this.db,
@@ -43,7 +45,9 @@ class RecordingProvider extends ChangeNotifier {
     SensorService? sensorService,
     ForegroundServiceController? foregroundService,
     PermissionService? permissionService,
+    PhotoService? photoService,
   })  : location = locationService ?? LocationService(),
+        photos = photoService ?? PhotoService(),
         sensors = sensorService ??
             SensorService(detector: DrivingEventDetector(
               brakingThreshold: settings.brakingThreshold,
@@ -78,8 +82,10 @@ class RecordingProvider extends ChangeNotifier {
 
   int _manualEvents = 0;
   int _sensorEvents = 0;
+  int _photoEvents = 0;
   int get manualEventCount => _manualEvents;
   int get sensorEventCount => _sensorEvents;
+  int get photoEventCount => _photoEvents;
 
   String? _statusMessage;
   String? get statusMessage => _statusMessage;
@@ -147,6 +153,7 @@ class RecordingProvider extends ChangeNotifier {
     _currentTrack = track;
     _manualEvents = 0;
     _sensorEvents = 0;
+    _photoEvents = 0;
     _recentEvents.clear();
     _buffer.clear();
     _pendingDistance = 0;
@@ -289,6 +296,31 @@ class RecordingProvider extends ChangeNotifier {
       note: fix == null || !fix.isOk ? '无定位信号' : null,
     ));
     _manualEvents++;
+    notifyListeners();
+    return true;
+  }
+
+  /// 拍照事件：把拍照产物落盘到 `photos/<trackId>/`，并写入 photo 事件。
+  /// 坐标逻辑同手动打点：取当前最新定位，无定位记 null + degraded。
+  Future<bool> photoEvent(String sourcePath) async {
+    final track = _currentTrack;
+    if (!isRecording || track?.id == null) return false;
+
+    final now = DateTime.now();
+    final dest = await photos.persist(sourcePath, track!.id!, now);
+
+    final fix = location.lastFix;
+    await db.insertEvent(DriveEvent(
+      trackId: track.id!,
+      timestamp: now,
+      type: DriveEventType.photo,
+      latitude: fix?.latitude,
+      longitude: fix?.longitude,
+      degraded: fix == null || !fix.isOk,
+      note: fix == null || !fix.isOk ? '无定位信号' : null,
+      photoPath: dest,
+    ));
+    _photoEvents++;
     notifyListeners();
     return true;
   }
