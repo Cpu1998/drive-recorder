@@ -9,6 +9,7 @@ import 'providers/settings_provider.dart';
 import 'providers/tracks_provider.dart';
 import 'services/bluetooth_car_service.dart';
 import 'services/database/app_database.dart';
+import 'services/sample_track_seeder.dart';
 import 'services/settings_service.dart';
 import 'services/sync/firestore_sync_service_impl.dart';
 
@@ -38,8 +39,16 @@ Future<void> main() async {
     );
   }
   bluetooth.autoEnabled = settings.btAutoEnabled;
-  await bluetooth.start();
+  try {
+    await bluetooth.start();
+  } catch (e) {
+    // 蓝牙启动失败不阻塞 App（部分设备无蓝牙/权限拒绝时也能正常用）
+    debugPrint('蓝牙监测启动失败（忽略）：$e');
+  }
   recording.attachBluetoothEvents(bluetooth.connectionEvents);
+
+  // 首次启动种入示例轨迹（无高德 Key 时定位不可用，示例保证详情页可体验）
+  await SampleTrackSeeder(db, prefs).seedIfNeeded();
 
   await tracksProvider.refresh();
 

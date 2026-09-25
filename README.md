@@ -130,13 +130,24 @@ Android 包名：`com.zhangkeyou.drive_recorder`。
 - 高德定位 SDK 在国内坐标系（GCJ-02），GPX 导出的经纬度即 GCJ-02，
   在国际地图（OSM/Google）上会偏移数百米——属预期行为
 
+### v1.2.0 稳定性修复
+- **修复「点开历史轨迹闪退 / 之后无法启动」**：根因是没有定位点的轨迹会让高德
+  原生地图用空点集初始化 polyline 而崩溃；且首页三个 Tab 是急切构建，崩溃后每次
+  启动都会复现。现在：
+  - 无定位点的轨迹在详情页直接显示可读占位提示，不再创建地图；
+  - Tab 改为懒加载，只有访问过的页面才构建；
+  - 数据库文件损坏时自动备份（`*.corrupt-<时间戳>`）并重建，不再卡死启动。
+- **新增示例轨迹**：首次启动且本地无任何轨迹时，自动种入一条带定位点、手动
+  打点、急刹、照片事件的完整示例（名为「示例轨迹（可删除）」），方便未配置
+  高德 Key 时也能体验详情页/GPX 导出。删除后不会再次生成。
+
 ## 6. 开发与验证
 
 ```bash
 export PATH="$HOME/flutter/bin:$PATH"
 flutter pub get
 flutter analyze        # 0 issues
-flutter test           # 29 个用例：急刹/碰撞算法、GPX 生成、DAO 读写、设置页
+flutter test           # 46 个用例：急刹/碰撞算法、GPX 生成、DAO 读写、设置页、DB 损坏自恢复、示例种入、地图空点守卫
 flutter build apk --debug
 ```
 
