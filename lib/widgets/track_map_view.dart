@@ -66,6 +66,7 @@ class TrackMapView extends StatefulWidget {
 
 class _TrackMapViewState extends State<TrackMapView> {
   bool _privacyAgreed = false;
+  bool _mapReady = false;
   bool _privacyChecked = false;
 
   @override
@@ -229,11 +230,19 @@ class _TrackMapViewState extends State<TrackMapView> {
       const AMapPrivacyStatement(hasContains: true, hasShow: true, hasAgree: true),
     );
 
+    // 修复：初始标记在地图原生引擎就绪前创建会触发
+    // BitmapDescriptorFactory NPE（amap_map 初始 markers 时序坑），
+    // 改为 onMapCreated 之后再挂标记（走 markers#update 通道）。
+    final markers = _mapReady ? _markers.toSet() : const <amap.Marker>{};
     return amap.AMapWidget(
       initialCameraPosition: _initialCamera,
-      markers: _markers.toSet(),
+      markers: markers,
       polylines: {_polyline},
-      onMapCreated: (_) => AppLogger.i('map', '地图原生视图已创建（onMapCreated 回调到达）'),
+      onMapCreated: (_) {
+        AppLogger.i('map', '地图原生视图已创建（onMapCreated 回调到达）');
+        setState(() => _mapReady = true);
+        AppLogger.i('map', '地图就绪，挂载 ${_markers.length} 个事件标记');
+      },
     );
   }
 }
