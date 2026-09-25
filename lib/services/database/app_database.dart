@@ -13,7 +13,7 @@ class AppDatabase {
   static const String dbName = 'drive_recorder.db';
 
   /// 数据库结构版本号。改动表结构时 +1，并在 [onUpgrade] 增加迁移分支。
-  static const int dbVersion = 1;
+  static const int dbVersion = 2;
 
   final Database db;
 
@@ -78,7 +78,8 @@ class AppDatabase {
         longitude REAL,
         degraded INTEGER NOT NULL DEFAULT 0,
         track_point_id INTEGER,
-        note TEXT
+        note TEXT,
+        photo_path TEXT
       )
     ''');
     await db
@@ -99,7 +100,11 @@ class AppDatabase {
   static Future<void> _onUpgrade(
       Database db, int oldVersion, int newVersion) async {
     switch (oldVersion) {
-      // case 1: v2 迁移写这里
+      case 1:
+        // v2：events 表新增 photo_path（photo 事件关联的照片文件路径）。
+        // 仅增量 DDL，老数据零丢失。
+        await db.execute(
+            'ALTER TABLE events ADD COLUMN photo_path TEXT');
       // case 2: v3 迁移写这里
     }
   }

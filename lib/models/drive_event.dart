@@ -9,7 +9,10 @@ enum DriveEventType {
   braking,
 
   /// 碰撞（尖峰）
-  collision;
+  collision,
+
+  /// 途中拍照
+  photo;
 
   static DriveEventType fromName(String name) => values.firstWhere(
         (e) => e.name == name,
@@ -20,6 +23,7 @@ enum DriveEventType {
         manual => '手动打点',
         braking => '急刹',
         collision => '碰撞',
+        photo => '拍照',
       };
 }
 
@@ -47,6 +51,9 @@ class DriveEvent {
 
   final String? note;
 
+  /// photo 事件关联的照片文件路径（应用文档目录 `photos/<trackId>/<ts>.jpg`）。
+  final String? photoPath;
+
   const DriveEvent({
     this.id,
     required this.trackId,
@@ -58,6 +65,7 @@ class DriveEvent {
     this.degraded = false,
     this.trackPointId,
     this.note,
+    this.photoPath,
   });
 
   DriveEvent copyWith({
@@ -71,6 +79,7 @@ class DriveEvent {
     bool? degraded,
     int? trackPointId,
     String? note,
+    String? photoPath,
   }) =>
       DriveEvent(
         id: id ?? this.id,
@@ -83,6 +92,7 @@ class DriveEvent {
         degraded: degraded ?? this.degraded,
         trackPointId: trackPointId ?? this.trackPointId,
         note: note ?? this.note,
+        photoPath: photoPath ?? this.photoPath,
       );
 
   Map<String, Object?> toRow() => {
@@ -95,6 +105,7 @@ class DriveEvent {
         'degraded': degraded ? 1 : 0,
         'track_point_id': trackPointId,
         'note': note,
+        'photo_path': photoPath,
       };
 
   static DriveEvent fromRow(Map<String, Object?> row) => DriveEvent(
@@ -108,5 +119,6 @@ class DriveEvent {
         degraded: (row['degraded'] as int?) == 1,
         trackPointId: row['track_point_id'] as int?,
         note: row['note'] as String?,
+        photoPath: row['photo_path'] as String?,
       );
 }
