@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
+import '../app_logger.dart';
+
 import '../../models/drive_event.dart';
 import '../../models/track.dart';
 import '../../models/track_point.dart';
@@ -36,6 +38,7 @@ class AppDatabase {
     try {
       return AppDatabase._(await _open(f, databasePath));
     } catch (e) {
+      AppLogger.w('db', '数据库打开失败，进入损坏自恢复：$e');
       final ts = DateTime.now().millisecondsSinceEpoch;
       for (final suffix in ['', '-journal', '-wal', '-shm']) {
         final src = '$databasePath$suffix';
@@ -47,6 +50,7 @@ class AppDatabase {
           await f.deleteDatabase(src);
         }
       }
+      AppLogger.i('db', '已备份损坏库并重建（*.corrupt-$ts）');
       return AppDatabase._(await _open(f, databasePath));
     }
   }

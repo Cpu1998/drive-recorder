@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../models/drive_event.dart';
 import '../models/track.dart';
 import '../models/track_point.dart';
+import '../services/app_logger.dart';
 import '../services/database/app_database.dart';
 import '../services/driving_event_detector.dart';
 import '../services/foreground_service.dart';
@@ -139,9 +140,11 @@ class RecordingProvider extends ChangeNotifier {
     final perm = await permissions.ensureRecordingPermissions();
     if (!perm.ok) {
       _statusMessage = '缺少权限：${perm.missing.join('、')}';
+      AppLogger.w('record', '开始记录被拒：缺少 ${perm.missing.join('、')}');
       notifyListeners();
       return false;
     }
+    AppLogger.i('record', '开始记录（来源 $source）');
 
     final now = DateTime.now();
     var track = Track(
@@ -150,6 +153,7 @@ class RecordingProvider extends ChangeNotifier {
       name: defaultTrackName(now),
     );
     track = await db.insertTrack(track);
+    AppLogger.i('record', '轨迹 #${track.id} 已创建');
     _currentTrack = track;
     _manualEvents = 0;
     _sensorEvents = 0;
@@ -192,7 +196,8 @@ class RecordingProvider extends ChangeNotifier {
     if (!isRecording) return;
 
     await _flush();
-
+    AppLogger.i('record', '停止记录：${_currentTrack?.name ?? ''}，'
+        '点数 ${_currentTrack?.pointCount ?? 0}，事件 ${_currentTrack?.eventCount ?? 0}');
     location.stop();
     sensors.stop();
     await _fixSub?.cancel();

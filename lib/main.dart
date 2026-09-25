@@ -10,12 +10,15 @@ import 'providers/tracks_provider.dart';
 import 'services/bluetooth_car_service.dart';
 import 'package:amap_flutter_location/amap_flutter_location.dart';
 
+import 'services/app_logger.dart';
 import 'services/database/app_database.dart';
 import 'services/sample_track_seeder.dart';
 import 'services/settings_service.dart';
 import 'services/sync/firestore_sync_service_impl.dart';
 
 Future<void> main() async {
+  AppLogger.attachGlobalHandlers();
+  AppLogger.i('app', '进程启动 v1.3.0');
   WidgetsFlutterBinding.ensureInitialized();
 
   final db = await AppDatabase.open();
@@ -45,19 +48,24 @@ Future<void> main() async {
   final amapKey = settings.amapKey;
   if (amapKey.isNotEmpty) {
     AMapFlutterLocation.setApiKey(amapKey, '');
+    AppLogger.i('key', '定位 Key 已注入：${AppLogger.maskKey(amapKey)}');
+  } else {
+    AppLogger.w('key', '未配置高德 Key（设置页可填），使用打包内置 Key');
   }
 
   bluetooth.autoEnabled = settings.btAutoEnabled;
   try {
     await bluetooth.start();
+    AppLogger.i('bluetooth', '车机蓝牙监测已启动');
   } catch (e) {
     // 蓝牙启动失败不阻塞 App（部分设备无蓝牙/权限拒绝时也能正常用）
-    debugPrint('蓝牙监测启动失败（忽略）：$e');
+    AppLogger.w('bluetooth', '蓝牙监测启动失败（忽略）：$e');
   }
   recording.attachBluetoothEvents(bluetooth.connectionEvents);
 
   // 首次启动种入示例轨迹（无高德 Key 时定位不可用，示例保证详情页可体验）
-  await SampleTrackSeeder(db, prefs).seedIfNeeded();
+  final seeded = await SampleTrackSeeder(db, prefs).seedIfNeeded();
+  AppLogger.i('sample', seeded ? '已种入示例轨迹（可删除）' : '未种入示例轨迹（已种过或已有轨迹）');
 
   await tracksProvider.refresh();
 

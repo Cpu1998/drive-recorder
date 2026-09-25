@@ -5,6 +5,7 @@ import '../providers/bluetooth_state_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/bluetooth_car_service.dart';
 import '../services/permission_service.dart';
+import 'log_screen.dart';
 
 /// 设置页：急刹/碰撞阈值滑块、车机绑定、Firebase 同步开关。
 class SettingsScreen extends StatefulWidget {
@@ -96,6 +97,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ],
             ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.receipt_long_outlined),
+            title: const Text('运行日志'),
+            subtitle: const Text('查看定位/地图/记录的运行过程与错误，可分享'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context)
+                .push(MaterialPageRoute(builder: (_) => const LogScreen())),
           ),
           const Divider(),
 

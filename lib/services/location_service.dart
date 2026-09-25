@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:amap_flutter_location/amap_flutter_location.dart';
+
+import 'app_logger.dart';
 import 'package:amap_flutter_location/amap_location_option.dart';
 import 'package:flutter/foundation.dart';
 
@@ -86,11 +88,13 @@ class LocationService {
     _subscription = _client!.onLocationChanged().listen(_onFix);
     _applyOption();
     _client!.startLocation();
+    AppLogger.i('location', '连续定位已启动（模式 $_mode）');
   }
 
   /// 停止连续定位（不销毁客户端，便于复用）。
   void stop() {
     _running = false;
+    AppLogger.i('location', '连续定位已停止');
     _client?.stopLocation();
     _subscription?.cancel();
     _subscription = null;
@@ -133,6 +137,9 @@ class LocationService {
       errorCode: errorCode,
       errorInfo: event['errorInfo'] as String?,
     );
+    if (!fix.isOk) {
+      AppLogger.w('location', '定位失败 errorCode=$errorCode ${fix.errorInfo ?? ''}');
+    }
     if (fix.isOk) lastFix = fix;
     _fixes.add(fix);
     _adaptInterval(fix);

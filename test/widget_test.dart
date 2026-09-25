@@ -72,6 +72,9 @@ void main() {
 
     expect(find.text('急刹减速度阈值'), findsOneWidget);
     expect(find.text('碰撞加速度阈值'), findsOneWidget);
+    // 车机开关被顶出首屏（v1.3.0 设置页顶部新增 Key/日志入口），先滚到可见
+    await tester.scrollUntilVisible(find.text('连上车机自动开始记录'), 200,
+        scrollable: find.byType(Scrollable).first);
     expect(find.text('连上车机自动开始记录'), findsOneWidget);
 
     // 滑块默认值展示（未滚动时可见，先断言）

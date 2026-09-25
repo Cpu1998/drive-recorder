@@ -6,6 +6,7 @@ import 'package:x_amap_base/x_amap_base.dart';
 import '../models/drive_event.dart';
 import '../models/track.dart';
 import '../models/track_point.dart';
+import '../services/app_logger.dart';
 import '../utils/constants.dart';
 
 /// 高德隐私合规门：未同意前不初始化地图 SDK（同 flutter_mapapp 做法）。
@@ -76,6 +77,7 @@ class _TrackMapViewState extends State<TrackMapView> {
   Future<void> _checkPrivacy() async {
     final prefs = await SharedPreferences.getInstance();
     final agreed = prefs.getBool(PrefKeys.amapPrivacyAgreed) == true;
+    AppLogger.i('map', agreed ? '高德隐私：已同意' : '高德隐私：待用户确认');
     if (!mounted) return;
     if (agreed) {
       setState(() {
@@ -215,6 +217,8 @@ class _TrackMapViewState extends State<TrackMapView> {
     // 按官方示例要求：在 AMapWidget 创建前完成初始化与合规声明
     // 优先用设置页配置的 Key（运行时注入），否则走 manifest meta-data
     final key = widget.amapKey ?? '';
+    AppLogger.i('map', '创建地图：${key.isEmpty ? '内置 Key（manifest）' : '设置页 Key ${AppLogger.maskKey(key)}'}，'
+        '定位点 ${widget.points.where((p) => p.hasFix).length} 个，事件 ${widget.events.length} 个');
     amap.AMapInitializer.init(
       context,
       apiKey: key.isEmpty
@@ -229,6 +233,7 @@ class _TrackMapViewState extends State<TrackMapView> {
       initialCameraPosition: _initialCamera,
       markers: _markers.toSet(),
       polylines: {_polyline},
+      onMapCreated: (_) => AppLogger.i('map', '地图原生视图已创建（onMapCreated 回调到达）'),
     );
   }
 }
