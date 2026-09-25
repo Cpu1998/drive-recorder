@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>行车记录</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>drive_recorder</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(FLUTTER_BUILD_NAME)</string>
+	<key>CFBundleSignature</key>
+	<string>????</string>
+	<key>CFBundleVersion</key>
+	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
+	<key>UIMainStoryboardFile</key>
+	<string>Main</string>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
+
+	<!-- ==================== 行车记录 iOS 配置（见 README「iOS 说明」） ==================== -->
+	<!-- 后台持续定位：熄屏/切后台时继续记录轨迹 -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+		<string>bluetooth-central</string>
+	</array>
+	<!-- 定位权限描述（前台 + 始终） -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>行车记录需要在您使用 App 时获取位置以记录行车轨迹。</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>行车记录需要始终访问位置，以便在后台（含熄屏）持续记录行车轨迹与驾驶事件。</string>
+	<!-- 蓝牙：车机自动启停检测 -->
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>行车记录需要访问蓝牙以检测与车机的连接状态，自动开始/停止记录。</string>
+	<!-- 高德 iOS Key：在此处填入高德开放平台申请的 iOS Key（与 Android Key 分开申请）。
+	     未填则地图/定位功能不可用，但不影响编译。 -->
+	<key>com.amap.api.ioskey</key>
+	<string>YOUR_AMAP_IOS_KEY</string>
+</dict>
+</plist>
