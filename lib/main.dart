@@ -9,6 +9,7 @@ import 'providers/settings_provider.dart';
 import 'providers/tracks_provider.dart';
 import 'services/bluetooth_car_service.dart';
 import 'package:amap_flutter_location/amap_flutter_location.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 
 import 'services/app_logger.dart';
 import 'services/crash_sentinel.dart';
@@ -25,6 +26,16 @@ Future<void> main() async {
 
   // 检查上次运行是否被系统级杀死（native 崩溃/LMK，无 Dart 异常）
   await CrashSentinel.checkLastRun();
+
+  // 设备信息（排障必备：机型/系统版本/ABI 直接进日志）
+  try {
+    final dev = await DeviceInfoPlugin().androidInfo;
+    AppLogger.i('app', '设备：${dev.manufacturer} ${dev.model}，'
+        'Android ${dev.version.release}（SDK ${dev.version.sdkInt}），'
+        'ABI ${dev.supportedAbis.join('/')}');
+  } catch (e) {
+    AppLogger.w('app', '设备信息获取失败（忽略）：$e');
+  }
 
   final db = await AppDatabase.open();
   final prefs = await SharedPreferences.getInstance();
