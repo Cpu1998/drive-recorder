@@ -11,6 +11,7 @@ import 'services/bluetooth_car_service.dart';
 import 'package:amap_flutter_location/amap_flutter_location.dart';
 
 import 'services/app_logger.dart';
+import 'services/crash_sentinel.dart';
 import 'utils/constants.dart';
 import 'services/database/app_database.dart';
 import 'services/sample_track_seeder.dart';
@@ -21,6 +22,9 @@ Future<void> main() async {
   AppLogger.attachGlobalHandlers();
   AppLogger.i('app', '进程启动 v${AppInfo.version}');
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 检查上次运行是否被系统级杀死（native 崩溃/LMK，无 Dart 异常）
+  await CrashSentinel.checkLastRun();
 
   final db = await AppDatabase.open();
   final prefs = await SharedPreferences.getInstance();

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:amap_map/amap_map.dart' as amap;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -7,6 +9,7 @@ import '../models/drive_event.dart';
 import '../models/track.dart';
 import '../models/track_point.dart';
 import '../services/app_logger.dart';
+import '../services/crash_sentinel.dart';
 import '../utils/constants.dart';
 
 /// 高德隐私合规门：未同意前不初始化地图 SDK（同 flutter_mapapp 做法）。
@@ -68,11 +71,20 @@ class _TrackMapViewState extends State<TrackMapView> {
   bool _privacyAgreed = false;
   bool _mapReady = false;
   bool _privacyChecked = false;
+  Timer? _overlaysSettledTimer;
 
   @override
   void initState() {
     super.initState();
     _checkPrivacy();
+  }
+
+  @override
+  void dispose() {
+    _overlaysSettledTimer?.cancel();
+    // 用户主动离开地图页：清除哨兵，避免下次启动误报
+    CrashSentinel.clear();
+    super.dispose();
   }
 
   Future<void> _checkPrivacy() async {
@@ -230,18 +242,32 @@ class _TrackMapViewState extends State<TrackMapView> {
       const AMapPrivacyStatement(hasContains: true, hasShow: true, hasAgree: true),
     );
 
-    // 修复：初始标记在地图原生引擎就绪前创建会触发
-    // BitmapDescriptorFactory NPE（amap_map 初始 markers 时序坑），
-    // 改为 onMapCreated 之后再挂标记（走 markers#update 通道）。
+    // 修复：标记与轨迹线在地图原生引擎就绪前创建会触发
+    // native 崩溃/NPE（amap_map 经 creationParams 在 factory.create
+    // 阶段（引擎构造后毫秒级）同步处理 markersToAdd/polylinesToAdd，
+    // 此时引擎未就绪）。改为 onMapCreated 之后再挂载
+    // （分别走 markers#update / polylines#update 通道）。
     final markers = _mapReady ? _markers.toSet() : const <amap.Marker>{};
+    final polylines = _mapReady
+        ? {_polyline}
+        : const <amap.Polyline>{};
+    CrashSentinel.mark('map_build（创建地图原生视图）');
     return amap.AMapWidget(
       initialCameraPosition: _initialCamera,
       markers: markers,
-      polylines: {_polyline},
+      polylines: polylines,
       onMapCreated: (_) {
         AppLogger.i('map', '地图原生视图已创建（onMapCreated 回调到达）');
+        CrashSentinel.mark('map_overlays（挂载轨迹线与事件标记）');
         setState(() => _mapReady = true);
-        AppLogger.i('map', '地图就绪，挂载 ${_markers.length} 个事件标记');
+        AppLogger.i('map', '地图就绪，挂载轨迹线与 ${_markers.length} 个事件标记'
+            '（走 update 通道，避开引擎未就绪窗口）');
+        // 覆盖物挂载后存活 2 秒即视为安全过关，清除哨兵
+        _overlaysSettledTimer?.cancel();
+        _overlaysSettledTimer = Timer(const Duration(seconds: 2), () {
+          CrashSentinel.clear();
+          AppLogger.i('map', '轨迹线与标记挂载完成，地图阶段结束');
+        });
       },
     );
   }
