@@ -38,6 +38,24 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // 高德 3D SDK 只发布 arm ABI 的 .so（无 x86_64）。若不限定 ABI，
+        // x86_64 模拟器按首选 ABI 安装时不会解包 arm 库，地图 GL 引擎
+        // dlopen 失败（UnsatisfiedLinkError），表现为只有 logo 没有地图。
+        // 限定 arm64-v8a 后，支持 ARM 转译的模拟器（abilist 含 arm64-v8a）
+        // 会以转译模式运行整个进程，地图可正常渲染；真机不受影响。
+        ndk {
+            abiFilters += listOf("arm64-v8a")
+        }
+    }
+
+    // 强制剥离非 arm64 的 native 库。仅靠 ndk.abiFilters 不够：依赖（如
+    // androidx datastore）自带的 lib/x86_64/*.so 会混进 APK，使 PackageManager
+    // 认为 APK 支持 x86_64，从而按 x86_64 启动进程，arm64 的高德/Flutter
+    // 引擎库全部加载失败（EM_AARCH64 vs EM_X86_64 崩溃 / dlopen not found）。
+    packaging {
+        jniLibs {
+            excludes += setOf("lib/x86_64/**", "lib/armeabi-v7a/**")
+        }
     }
 
     buildTypes {
