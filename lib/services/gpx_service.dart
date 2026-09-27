@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'package:path/path.dart' as p;
+import 'package:media_store_plus/media_store_plus.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../models/drive_event.dart';
 import '../models/track.dart';
@@ -64,14 +66,55 @@ class GpxService {
     return b.toString();
   }
 
-  /// 保存到文件，返回文件对象。
-  Future<File> save(String gpx, Directory docsDir, Track track) async {
-    final fileName =
-        'drive_${track.id}_${track.startTime.toIso8601String().split('T').first}.gpx';
-    final file = File('${docsDir.path}/$fileName');
+  /// 保存 GPX，返回保存结果。
+  ///
+  /// - Android 10+：先写临时文件，再经 MediaStore 落到公共下载目录
+  ///   `Download/DriveRecorder/`，免存储权限，[GpxSaveResult.file] 为空；
+  /// - Android 9 及以下：直接写公共下载目录（依赖 manifest 里的
+  ///   WRITE_EXTERNAL_STORAGE，maxSdkVersion=29，运行时按需申请）；
+  /// - 其余平台：写入 [fallbackDir]（调用方给的应用文档目录）。
+  Future<GpxSaveResult> save(String gpx, Directory fallbackDir, Track track) async {
+    if (Platform.isAndroid) {
+      await MediaStore.ensureInitialized();
+      MediaStore.appFolder = _downloadSubdir;
+      final sdk = await MediaStore().getPlatformSDKInt();
+      if (sdk <= 29) {
+        final status = await Permission.storage.request();
+        if (!status.isGranted) {
+          throw Exception('未授予存储权限，无法写入公共下载目录');
+        }
+      }
+      // 临时文件由插件复制到 MediaStore 后自行删除
+      final temp = await writeLocal(gpx, fallbackDir, track);
+      final info = await MediaStore().saveFile(
+        tempFilePath: temp.path,
+        dirType: DirType.download,
+        dirName: DirName.download,
+      );
+      if (info == null) {
+        throw Exception('保存到下载目录失败（MediaStore 返回空）');
+      }
+      // 去重时 info.name 才是实际落盘文件名
+      return GpxSaveResult(displayPath: 'Download/$_downloadSubdir/${info.name}');
+    }
+    final file = await writeLocal(gpx, fallbackDir, track);
+    return GpxSaveResult(file: file, displayPath: file.path);
+  }
+
+  /// 直接写入 [dir] 并返回文件对象（分享面板需要真实文件路径，走这里）。
+  Future<File> writeLocal(String gpx, Directory dir, Track track) async {
+    final file = File('${dir.path}/${_fileNameOf(track)}');
     await file.writeAsString(gpx, flush: true);
     return file;
   }
+
+  // ---------------------------------------------------------------------------
+
+  /// 公共下载目录下的导出子文件夹。
+  static const String _downloadSubdir = 'DriveRecorder';
+
+  String _fileNameOf(Track track) =>
+      'drive_${track.id}_${track.startTime.toIso8601String().split('T').first}.gpx';
 
   // ---------------------------------------------------------------------------
 
@@ -122,4 +165,16 @@ class GpxService {
       .replaceAll('>', '&gt;')
       .replaceAll('"', '&quot;')
       .replaceAll("'", '&apos;');
+}
+
+/// GPX 保存结果。
+///
+/// - 经 MediaStore 保存时（Android 10+）[file] 为空，文件在公共下载目录，
+///   只能通过 [displayPath]（如 `Download/DriveRecorder/xxx.gpx`）定位；
+/// - 其余情况 [file] 为实际落盘文件。
+class GpxSaveResult {
+  final File? file;
+  final String displayPath;
+
+  const GpxSaveResult({this.file, required this.displayPath});
 }

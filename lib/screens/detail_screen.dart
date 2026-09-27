@@ -75,11 +75,11 @@ class _DetailScreenState extends State<DetailScreen> {
         points: _points!,
         events: _events!,
       );
-      final docs = await getApplicationDocumentsDirectory();
-      final file =
-          await GpxService().save(gpx, docs, track);
-      if (!mounted) return;
       if (share) {
+        // 分享面板自会提供目标位置，临时文件即可，不留在应用私有目录
+        final tmp = await getTemporaryDirectory();
+        final file = await GpxService().writeLocal(gpx, tmp, track);
+        if (!mounted) return;
         await SharePlus.instance.share(
           ShareParams(
             files: [XFile(file.path)],
@@ -87,8 +87,12 @@ class _DetailScreenState extends State<DetailScreen> {
           ),
         );
       } else {
+        // Android 落公共下载目录 Download/DriveRecorder/，其余平台落文档目录
+        final docs = await getApplicationDocumentsDirectory();
+        final result = await GpxService().save(gpx, docs, track);
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('已保存：${file.path}'),
+          content: Text('已保存：${result.displayPath}'),
           duration: const Duration(seconds: 4),
         ));
       }
