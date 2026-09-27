@@ -1,0 +1,59 @@
+name: iOS Build (unsigned IPA)
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_name:
+        description: '版本号(build-name)'
+        required: false
+        default: ''
+      build_number:
+        description: '构建号(build-number)'
+        required: false
+        default: ''
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Show toolchain
+        run: |
+          flutter --version
+          pod --version
+
+      - name: Pub get
+        run: flutter pub get
+
+      - name: Build iOS (no codesign)
+        run: |
+          ARGS=""
+          if [ -n "${{ github.event.inputs.build_name }}" ]; then
+            ARGS="$ARGS --build-name=${{ github.event.inputs.build_name }}"
+          fi
+          if [ -n "${{ github.event.inputs.build_number }}" ]; then
+            ARGS="$ARGS --build-number=${{ github.event.inputs.build_number }}"
+          fi
+          flutter build ios --release --no-codesign $ARGS
+
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p build/ipa/Payload
+          cp -R build/ios/iphoneos/Runner.app build/ipa/Payload/
+          cd build/ipa
+          zip -qry drive_recorder_unsigned.ipa Payload
+          ls -lh drive_recorder_unsigned.ipa
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: drive-recorder-ios-unsigned-ipa
+          path: build/ipa/drive_recorder_unsigned.ipa
+          retention-days: 30
