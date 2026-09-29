@@ -4,6 +4,7 @@ import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
 import '../app_logger.dart';
+import '../../utils/geo_utils.dart';
 
 import '../../models/drive_event.dart';
 import '../../models/track.dart';
@@ -17,7 +18,7 @@ class AppDatabase {
   static const String dbName = 'drive_recorder.db';
 
   /// 数据库结构版本号。改动表结构时 +1，并在 [onUpgrade] 增加迁移分支。
-  static const int dbVersion = 2;
+  static const int dbVersion = 3;
 
   final Database db;
 
@@ -133,7 +134,51 @@ class AppDatabase {
         await db.execute(
             'ALTER TABLE events ADD COLUMN photo_path TEXT');
       // case 2: v3 迁移写这里
+      case 2:
+        // v3：修复 v1.4.x 及以前的 bug——结束记录时用内存旧值回写，
+        // 把 DB 里累计好的 point_count/event_count/distance_meters 清零。
+        // 点数/事件数按实际行数、里程按相邻有效点重算，一次性修复历史。
+        await recomputeCounters(db);
     }
+  }
+
+  /// 按实际行数重算所有轨迹的点数/事件数，里程按相邻有效定位点
+  /// （时间序）大圆距离累加重算。
+  ///
+  /// v3 迁移用于修复历史清零；公开静态便于测试与手动修复工具复用。
+  static Future<void> recomputeCounters(Database db) async {
+    final trackRows = await db.query('tracks');
+    for (final row in trackRows) {
+      final id = row['id'] as int;
+      final pointCount = Sqflite.firstIntValue(await db.rawQuery(
+              'SELECT COUNT(*) FROM track_points WHERE track_id = ?', [id])) ??
+          0;
+      final eventCount = Sqflite.firstIntValue(await db.rawQuery(
+              'SELECT COUNT(*) FROM events WHERE track_id = ?', [id])) ??
+          0;
+      final pointRows = await db.query('track_points',
+          where: 'track_id = ?', whereArgs: [id], orderBy: 'timestamp ASC');
+      var distance = 0.0;
+      TrackPoint? prev;
+      for (final pr in pointRows) {
+        final point = TrackPoint.fromRow(pr);
+        if (point.hasFix && prev != null && prev.hasFix) {
+          distance += GeoUtils.distance(
+              prev.latitude!, prev.longitude!, point.latitude!, point.longitude!);
+        }
+        if (point.hasFix) prev = point;
+      }
+      await db.update(
+          'tracks',
+          {
+            'point_count': pointCount,
+            'event_count': eventCount,
+            'distance_meters': distance,
+          },
+          where: 'id = ?',
+          whereArgs: [id]);
+    }
+    AppLogger.i('db', '计数器已按实际数据重算（${trackRows.length} 条轨迹）');
   }
 
   Future<void> close() => db.close();
@@ -267,5 +312,48 @@ class AppDatabase {
         orderBy: 'timestamp DESC',
         limit: 1);
     return rows.isEmpty ? null : DriveEvent.fromRow(rows.first);
+  }
+
+  // ---------------------------------------------------------------------------
+  // 备份导入
+  // ---------------------------------------------------------------------------
+
+  /// 原子导入一条完整轨迹（轨迹 + 点 + 事件），重分配 id 与 track_id，
+  /// 计数器按实际行数写入。照片路径由调用方（BackupService）负责重映射。
+  Future<Track> importTrack(
+      Track track, List<TrackPoint> points, List<DriveEvent> events) async {
+    return db.transaction<Track>((txn) async {
+      final trackId = await txn.insert('tracks', track.toRow());
+      if (points.isNotEmpty) {
+        final batch = txn.batch();
+        for (final point in points) {
+          final row = point.toRow()..['track_id'] = trackId;
+          batch.insert('track_points', row);
+        }
+        await batch.commit(noResult: true);
+      }
+      if (events.isNotEmpty) {
+        final batch = txn.batch();
+        for (final e in events) {
+          final row = e.toRow()..['track_id'] = trackId;
+          batch.insert('events', row);
+        }
+        await batch.commit(noResult: true);
+      }
+      // 里程按导入点现算（不信任备份值，备份/目标版本可能不一致）
+      var dist = 0.0;
+      TrackPoint? prev;
+      for (final point in points) {
+        if (point.hasFix && prev != null && prev.hasFix) {
+          dist += GeoUtils.distance(prev.latitude!, prev.longitude!,
+              point.latitude!, point.longitude!);
+        }
+        if (point.hasFix) prev = point;
+      }
+      await txn.rawUpdate(
+          'UPDATE tracks SET point_count = ?, event_count = ?, distance_meters = ? WHERE id = ?',
+          [points.length, events.length, dist, trackId]);
+      return track.copyWith(id: trackId);
+    });
   }
 }

@@ -95,5 +95,5 @@ class AMapKeys {
 
 /// 应用版本（与 pubspec version 同步维护；用于启动日志等展示）。
 class AppInfo {
-  static const String version = '1.4.0';
+  static const String version = '1.5.0';
 }

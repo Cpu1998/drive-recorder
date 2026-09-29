@@ -222,8 +222,8 @@ void main() {
   });
 
   group('迁移版本骨架', () {
-    test('dbVersion 为 2（升级时在 onUpgrade 增加分支）', () {
-      expect(AppDatabase.dbVersion, 2);
+    test('dbVersion 为 3（升级时在 onUpgrade 增加分支）', () {
+      expect(AppDatabase.dbVersion, 3);
     });
   });
 
@@ -376,6 +376,93 @@ void main() {
       expect((await db2.getTrack(trackId))!.eventCount, 3);
 
       await db2.close();
+    });
+  });
+
+  group('计数器修复 recomputeCounters（v2→v3 迁移用）', () {
+    test('被清零的里程/点数/事件数可全量重算恢复', () async {
+      final t = await db.insertTrack(mkTrack(DateTime(2026, 9, 25, 10)));
+      await db.insertPoints([
+        TrackPoint(
+            trackId: t.id!,
+            timestamp: DateTime(2026, 9, 25, 10),
+            latitude: 30.0,
+            longitude: 120.0),
+        TrackPoint(
+            trackId: t.id!,
+            timestamp: DateTime(2026, 9, 25, 10, 0, 10),
+            latitude: 30.001,
+            longitude: 120.0),
+        TrackPoint(
+            trackId: t.id!,
+            timestamp: DateTime(2026, 9, 25, 10, 0, 20),
+            latitude: 30.002,
+            longitude: 120.0),
+      ], 0);
+      await db.insertEvent(DriveEvent(
+          trackId: t.id!,
+          timestamp: DateTime(2026, 9, 25, 10, 0, 5),
+          type: DriveEventType.braking));
+
+      // 模拟 v1.4.0 stop() 把计数器清零写回的坏数据
+      await db.db.rawUpdate(
+          "UPDATE tracks SET point_count = 0, event_count = 0, distance_meters = 0 WHERE id = ?",
+          [t.id]);
+      final broken = await db.getTrack(t.id!);
+      expect(broken!.pointCount, 0);
+      expect(broken.distanceMeters, 0);
+
+      await AppDatabase.recomputeCounters(db.db);
+      final fixed = await db.getTrack(t.id!);
+      expect(fixed!.pointCount, 3);
+      expect(fixed.eventCount, 1);
+      // 0.001° 纬度 ≈ 111m，两段 ≈ 222m
+      expect(fixed.distanceMeters, closeTo(222, 2));
+    });
+
+    test('importTrack 事务导入：新 id + 计数器就位 + track_id 重映射', () async {
+      final exported = Track(
+        startTime: DateTime(2026, 9, 20, 8),
+        source: 'manual',
+        name: '来自备份',
+        pointCount: 2,
+        eventCount: 1,
+        distanceMeters: 100,
+      );
+      final imported = await db.importTrack(
+        exported,
+        [
+          TrackPoint(
+              trackId: 999,
+              timestamp: DateTime(2026, 9, 20, 8),
+              latitude: 31.0,
+              longitude: 121.0),
+          TrackPoint(
+              trackId: 999,
+              timestamp: DateTime(2026, 9, 20, 8, 0, 5),
+              latitude: 31.0001,
+              longitude: 121.0),
+        ],
+        [
+          DriveEvent(
+              trackId: 999,
+              timestamp: DateTime(2026, 9, 20, 8, 0, 1),
+              type: DriveEventType.collision),
+        ],
+      );
+
+      expect(imported.id, isNotNull);
+      expect(imported.id, isNot(999));
+      final reloaded = await db.getTrack(imported.id!);
+      expect(reloaded!.name, '来自备份');
+      expect(reloaded.pointCount, 2);
+      expect(reloaded.eventCount, 1);
+      final pts = await db.pointsForTrack(imported.id!);
+      expect(pts.length, 2);
+      expect(pts.every((p) => p.trackId == imported.id), isTrue);
+      final evts = await db.eventsForTrack(imported.id!);
+      expect(evts.length, 1);
+      expect(evts.first.trackId, imported.id);
     });
   });
 }

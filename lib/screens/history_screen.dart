@@ -62,7 +62,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     title: Text(t.name ?? '轨迹 #${t.id}'),
                     subtitle: Text(
                       '${_dateRange(t)} · ${formatDistance(t.distanceMeters)}'
-                      ' · ${t.pointCount} 点 · ${t.eventCount} 事件',
+                      ' · ${t.eventCount} 事件',
                     ),
                     trailing: t.endTime == null
                         ? const Chip(label: Text('进行中'))

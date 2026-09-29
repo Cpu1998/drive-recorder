@@ -1,9 +1,19 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../providers/bluetooth_state_provider.dart';
 import '../providers/settings_provider.dart';
+import '../providers/tracks_provider.dart';
+import '../services/app_logger.dart';
+import '../services/backup_service.dart';
 import '../services/bluetooth_car_service.dart';
+import '../services/database/app_database.dart';
 import '../services/permission_service.dart';
 import 'log_screen.dart';
 
@@ -20,6 +30,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _amapKeyController = TextEditingController();
   bool _amapKeyEdited = false;
   bool _amapKeySynced = false;
+  bool _backupBusy = false;
 
   @override
   void initState() {
@@ -41,6 +52,114 @@ class _SettingsScreenState extends State<SettingsScreen> {
       content: Text(key.isEmpty ? '已清除高德 Key，重启 App 后生效' : '已保存，重启 App 后生效（定位 SDK 需启动时注入）'),
       duration: const Duration(seconds: 3),
     ));
+  }
+
+  // —— 数据备份：导出 / 导入 ——
+
+  Future<void> _exportBackup() async {
+    if (_backupBusy) return;
+    setState(() => _backupBusy = true);
+    final backup = BackupService();
+    final db = context.read<AppDatabase>();
+    try {
+      final result = await backup.exportAll(db);
+      if (!mounted) return;
+      final saved = await backup.saveToDownloads(result.file);
+      if (!mounted) return;
+      if (saved != null) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('已导出 $saved（${result.tracks} 条轨迹，'
+              '${result.points} 点，${result.photos} 张照片）'),
+          duration: const Duration(seconds: 4),
+        ));
+      } else {
+        // 公共目录写入失败的兼容回落：存应用目录 + 分享面板另存
+        final docs = await getApplicationDocumentsDirectory();
+        final dest =
+            File(p.join(docs.path, p.basename(result.file.path)));
+        await result.file.copy(dest.path);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: const Text('公共下载目录写入失败，已调起分享面板，可另存到任意位置'),
+          duration: const Duration(seconds: 4),
+        ));
+        await SharePlus.instance.share(ShareParams(
+          files: [XFile(dest.path)],
+          text: '行车记录全量备份（${result.tracks} 条轨迹）',
+        ));
+      }
+    } catch (e) {
+      AppLogger.e('backup', '导出失败：$e');
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('导出失败：$e')));
+      }
+    } finally {
+      if (mounted) setState(() => _backupBusy = false);
+    }
+  }
+
+  Future<void> _importBackup() async {
+    if (_backupBusy) return;
+    try {
+      final picked = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['zip'],
+        dialogTitle: '选择 DriveRecorder 备份 zip',
+      );
+      final path = picked?.files.single.path;
+      if (path == null) return;
+
+      final backup = BackupService();
+      final preview = await backup.inspect(path);
+      if (!mounted) return;
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('导入备份？'),
+          content: Text(
+              '备份包含 ${preview.tracks} 条轨迹 / ${preview.points} 个轨迹点 /\n'
+              '${preview.events} 个事件 / ${preview.photos} 张照片。\n'
+              '重复的轨迹会自动跳过，已有数据不受影响。'),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('取消')),
+            FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('导入')),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+
+      if (!mounted) return;
+      final db = context.read<AppDatabase>();
+      final tracksProvider = context.read<TracksProvider>();
+      setState(() => _backupBusy = true);
+      final result = await backup.importZip(path, db);
+      await tracksProvider.refresh();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('已导入 ${result.imported} 条轨迹'
+            '（跳过重复 ${result.skippedDuplicates} 条，'
+            '照片 ${result.photosRestored} 张）'),
+        duration: const Duration(seconds: 4),
+      ));
+    } on BackupException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } catch (e) {
+      AppLogger.e('backup', '导入失败：$e');
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('导入失败：$e')));
+      }
+    } finally {
+      if (mounted) setState(() => _backupBusy = false);
+    }
   }
 
   @override
@@ -108,7 +227,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const Divider(),
 
-          // —— 事件检测阈值 ——
           _sectionHeader(context, '事件检测阈值'),
           ListTile(
             leading: const Icon(Icons.south_east),
@@ -236,6 +354,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const Divider(),
 
           // —— 关于 ——
+          // —— 数据备份 ——
+          _sectionHeader(context, '数据备份'),
+          ListTile(
+            leading: const Icon(Icons.upload_file_outlined),
+            title: const Text('导出全部数据'),
+            subtitle: const Text(
+                '全部轨迹/轨迹点/事件/照片打包为标准 ZIP（下载目录 DriveRecorder/），\n'
+                '可在任何设备解压查看，也可用于迁移',
+                style: TextStyle(fontSize: 12)),
+            enabled: !_backupBusy,
+            trailing: _backupBusy
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.chevron_right),
+            onTap: _exportBackup,
+          ),
+          ListTile(
+            leading: const Icon(Icons.restore_outlined),
+            title: const Text('导入备份'),
+            subtitle: const Text('从备份 ZIP 恢复轨迹与照片，重复轨迹自动跳过',
+                style: TextStyle(fontSize: 12)),
+            enabled: !_backupBusy,
+            trailing: const Icon(Icons.chevron_right),
+            onTap: _importBackup,
+          ),
+          const Divider(),
+
+          // —— 事件检测阈值 ——
           _sectionHeader(context, '关于'),
           const ListTile(
             leading: Icon(Icons.info_outline),

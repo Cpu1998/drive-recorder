@@ -219,7 +219,10 @@ class RecordingProvider extends ChangeNotifier {
 
     final track = _currentTrack;
     if (track != null && track.id != null) {
-      final finished = track.copyWith(endTime: DateTime.now());
+      // 以 DB 最新行回写结束时间：绝不能用内存副本直接覆盖，
+      // 否则会把 DB 里累计的计数清零（v1.4.x 及以前的 bug）。
+      final fresh = await db.getTrack(track.id!);
+      final finished = (fresh ?? track).copyWith(endTime: DateTime.now());
       await db.updateTrack(finished);
       _currentTrack = finished;
       await tracks.maybeUpload(finished);
@@ -286,6 +289,12 @@ class RecordingProvider extends ChangeNotifier {
     if (stored.isNotEmpty) {
       _lastWritten = stored.last;
     }
+    // 实时累计到内存副本：记录页里程/点数即时可见，
+    // 也保证 stop() 回写时不会用旧值把 DB 计数清零（v1.4.x 的 bug）。
+    _currentTrack = track!.copyWith(
+      pointCount: track.pointCount + points.length,
+      distanceMeters: track.distanceMeters + distance,
+    );
     if (isRecording) notifyListeners();
   }
 

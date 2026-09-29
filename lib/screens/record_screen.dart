@@ -58,7 +58,6 @@ class _RecordScreenState extends State<RecordScreen> {
                 trackName: track?.name,
                 startTime: track?.startTime,
                 speed: rec.currentSpeed,
-                pointCount: track?.pointCount ?? 0,
                 distance: track?.distanceMeters ?? 0,
                 gpsDegraded: rec.gpsDegraded,
                 locationRuntime: rec.locationRuntime,
@@ -164,7 +163,6 @@ class _StatusCard extends StatelessWidget {
   final String? trackName;
   final DateTime? startTime;
   final double? speed;
-  final int pointCount;
   final double distance;
   final bool gpsDegraded;
   final LocationRuntime locationRuntime;
@@ -175,7 +173,6 @@ class _StatusCard extends StatelessWidget {
     this.trackName,
     this.startTime,
     this.speed,
-    required this.pointCount,
     required this.distance,
     required this.gpsDegraded,
     required this.locationRuntime,
@@ -223,7 +220,6 @@ class _StatusCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 _Metric(label: '速度', value: formatSpeed(speed)),
-                _Metric(label: '轨迹点', value: '$pointCount'),
                 _Metric(label: '里程', value: formatDistance(distance)),
                 _Metric(
                   label: 'GPS',

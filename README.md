@@ -141,6 +141,13 @@ SHA1：`6E:34:F4:6E:3A:56:B6:6C:BB:E0:4F:FA:D1:8C:DF:26:2A:F3:4E:49`。
 - 高德定位 SDK 在国内坐标系（GCJ-02），GPX 导出的经纬度即 GCJ-02，
   在国际地图（OSM/Google）上会偏移数百米——属预期行为
 
+### v1.5.0 修复与备份
+- 修复「里程/轨迹点一直为 0」：结束记录时把内存里的陈旧计数写回数据库、清零累计值。
+  现在结束记录前会重读数据库最新值再写；录制中实时刷新；老数据升级时自动重算修复
+- 记录/历史/详情页不再显示轨迹点个数
+- GPX 保存失败自动回落（应用目录 + 分享面板）
+- 新增全量备份导入/导出（标准 ZIP，见上文「全量备份与恢复」）
+
 ### 定位降级自愈（v1.4.0）
 安卓端“高德突然无定位点”的自愈阶梯（`lib/services/location_service.dart`）：
 1. 看门狗每 5s 体检：高德超过「当前间隔+20s」无任何回调，或连续 3 次报错
@@ -193,7 +200,21 @@ compileSdk 29、jcenter），在 AGP 8 下无法配置。本机构建前已打�
 
 ## 7. 数据与导出
 - SQLite 三张表：`tracks`（会话）/ `track_points`（点）/ `events`（事件，v2 起 photo 事件带 `photo_path`），
-  批量事务写入，迁移走 `AppDatabase._onUpgrade`（当前 v2）
+  批量事务写入，迁移走 `AppDatabase._onUpgrade`（当前 v3：v3 起升级时自动重算被清零的
+  里程/点数/事件数计数器，修复 v1.4.0 及更早「结束记录时把累计值清零写回」的历史数据）
+- GPX 保存到公共下载目录失败时（机型兼容问题）自动回落应用目录并调起分享面板，不再直接报错
+
+### 全量备份与恢复（v1.5.0）
+设置 → 数据备份：
+- **导出全部数据**：轨迹 + 轨迹点 + 事件 + 照片打包为标准 ZIP
+  （`Download/DriveRecorder/DriveRecorder-backup-日期-时间.zip`），
+  内部为带版本号的 JSON（`manifest.json` + `tracks/<id>/track|points|events.json` + `photos/`），
+  任何设备/解压工具可直接打开；文件名全 ASCII，跨平台无乱码
+- **导入备份**：从文件选择器选 zip，预览数量并确认后导入；
+  自动分配新 id、照片落 `photos/<新id>/` 并重写事件路径；里程按点现算（不信任备份值）
+- **判重**：开始时间 + 名称 + 点数完全一致视为重复，重复导入自动跳过
+- **格式版本**：`manifest.version`，高于当前版本会拒绝导入并提示升级 App
+- 标准压缩（deflate）+ UTF-8 JSON，后续版本可按 manifest 版本兼容解析老备份
 - 拍照事件：照片存应用文档目录 `photos/<trackId>/<timestamp>.jpg`（与缓存隔离，避免系统清理误删）；
   详情页缩略图列表 + 全屏查看（InteractiveViewer 缩放）；删除轨迹时随级联清理（文件同步删除）
 - GPX 1.1：`trk/trkseg/trkpt(lat,lon,ele,time)`；有坐标的事件输出为

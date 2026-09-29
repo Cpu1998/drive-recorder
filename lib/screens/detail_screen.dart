@@ -91,10 +91,24 @@ class _DetailScreenState extends State<DetailScreen> {
         final docs = await getApplicationDocumentsDirectory();
         final result = await GpxService().save(gpx, docs, track);
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('已保存：${result.displayPath}'),
-          duration: const Duration(seconds: 4),
-        ));
+        if (result.fallback && result.file != null) {
+          // 公共目录写入失败：已回落应用目录，直接调起分享面板供另存
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('公共下载目录写入失败，已暂存应用目录，可在分享面板另存'),
+            duration: const Duration(seconds: 4),
+          ));
+          await SharePlus.instance.share(
+            ShareParams(
+              files: [XFile(result.file!.path)],
+              text: '行车轨迹 GPX（${track.name ?? '轨迹 #${track.id}'}）',
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('已保存：${result.displayPath}'),
+            duration: const Duration(seconds: 4),
+          ));
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -165,7 +179,6 @@ class _DetailScreenState extends State<DetailScreen> {
         children: [
           _item('里程', formatDistance(t.distanceMeters)),
           _item('时长', formatDuration(t.duration ?? Duration.zero)),
-          _item('轨迹点', '${t.pointCount}'),
           _item('事件', '${t.eventCount}'),
         ],
       ),
