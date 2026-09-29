@@ -81,6 +81,9 @@ class RecordingProvider extends ChangeNotifier {
       isRecording && (_lastFixAt == null ||
           DateTime.now().difference(_lastFixAt!) > const Duration(seconds: 30));
 
+  /// 定位链路运行状态（高德正常/恢复中/系统兜底），供 UI 展示。
+  LocationRuntime get locationRuntime => location.runtime;
+
   int _manualEvents = 0;
   int _sensorEvents = 0;
   int _photoEvents = 0;
@@ -92,6 +95,7 @@ class RecordingProvider extends ChangeNotifier {
   String? get statusMessage => _statusMessage;
 
   StreamSubscription? _fixSub;
+  StreamSubscription? _runtimeSub;
   StreamSubscription? _sensorEventSub;
 
   // —— 轨迹点缓冲 ——
@@ -171,6 +175,9 @@ class RecordingProvider extends ChangeNotifier {
     // 定位
     _fixSub?.cancel();
     _fixSub = location.fixes.listen(_onFix);
+    // 定位降级/回升等运行状态变化时刷新 UI
+    _runtimeSub?.cancel();
+    _runtimeSub = location.runtimeStream.listen((_) => notifyListeners());
     location.start();
 
     // 传感器（重建 detector 以应用最新阈值）
@@ -201,8 +208,10 @@ class RecordingProvider extends ChangeNotifier {
     location.stop();
     sensors.stop();
     await _fixSub?.cancel();
+    await _runtimeSub?.cancel();
     await _sensorEventSub?.cancel();
     _fixSub = null;
+    _runtimeSub = null;
     _sensorEventSub = null;
     _flushTimer?.cancel();
     _flushTimer = null;
@@ -363,6 +372,7 @@ class RecordingProvider extends ChangeNotifier {
   @override
   void dispose() {
     _fixSub?.cancel();
+    _runtimeSub?.cancel();
     _sensorEventSub?.cancel();
     _btConnectionSub?.cancel();
     _flushTimer?.cancel();

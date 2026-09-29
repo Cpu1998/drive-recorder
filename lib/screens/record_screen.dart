@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../providers/bluetooth_state_provider.dart';
 import '../providers/recording_provider.dart';
+import '../services/location_service.dart';
 import '../utils/formatters.dart';
 import 'settings_screen.dart';
 
@@ -60,6 +61,7 @@ class _RecordScreenState extends State<RecordScreen> {
                 pointCount: track?.pointCount ?? 0,
                 distance: track?.distanceMeters ?? 0,
                 gpsDegraded: rec.gpsDegraded,
+                locationRuntime: rec.locationRuntime,
                 sourceLabel: recording ? ' · ${_sourceLabel(track?.source)}' : '',
               ),
               const SizedBox(height: 12),
@@ -165,6 +167,7 @@ class _StatusCard extends StatelessWidget {
   final int pointCount;
   final double distance;
   final bool gpsDegraded;
+  final LocationRuntime locationRuntime;
   final String sourceLabel;
 
   const _StatusCard({
@@ -175,6 +178,7 @@ class _StatusCard extends StatelessWidget {
     required this.pointCount,
     required this.distance,
     required this.gpsDegraded,
+    required this.locationRuntime,
     required this.sourceLabel,
   });
 
@@ -223,15 +227,56 @@ class _StatusCard extends StatelessWidget {
                 _Metric(label: '里程', value: formatDistance(distance)),
                 _Metric(
                   label: 'GPS',
-                  value: gpsDegraded ? '降级' : '正常',
-                  valueColor: gpsDegraded ? Colors.orange : null,
+                  value: _gpsValue,
+                  valueColor: _gpsColor,
                 ),
               ],
             ),
+            if (locationRuntime == LocationRuntime.system) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.alt_route_rounded,
+                      size: 16, color: Colors.blue.shade700),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      '高德定位异常，已切系统定位兜底记录（恢复后自动切回）',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Colors.blue.shade700,
+                          ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       ),
     );
+  }
+  String get _gpsValue {
+    if (gpsDegraded) return '无信号';
+    switch (locationRuntime) {
+      case LocationRuntime.system:
+        return '兜底';
+      case LocationRuntime.amapRecovering:
+        return '恢复中';
+      default:
+        return '正常';
+    }
+  }
+
+  Color? get _gpsColor {
+    if (gpsDegraded) return Colors.orange;
+    switch (locationRuntime) {
+      case LocationRuntime.system:
+        return Colors.blue.shade700;
+      case LocationRuntime.amapRecovering:
+        return Colors.orange;
+      default:
+        return null;
+    }
   }
 }
 
