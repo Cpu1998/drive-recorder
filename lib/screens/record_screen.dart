@@ -55,6 +55,7 @@ class _RecordScreenState extends State<RecordScreen> {
             children: [
               _StatusCard(
                 recording: recording,
+                paused: rec.isPaused,
                 trackName: track?.name,
                 startTime: track?.startTime,
                 speed: rec.currentSpeed,
@@ -110,16 +111,57 @@ class _RecordScreenState extends State<RecordScreen> {
                 ),
               ),
 
-              // 开始/停止
-              FilledButton.icon(
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: recording ? Colors.red : null,
+              // 开始/暂停/继续/停止
+              if (rec.isActive)
+                Row(
+                  children: [
+                    Expanded(
+                      child: rec.isPaused
+                          ? FilledButton.icon(
+                              style: FilledButton.styleFrom(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 16),
+                              ),
+                              onPressed: rec.resume,
+                              icon: const Icon(Icons.play_arrow),
+                              label: const Text('继续记录'),
+                            )
+                          : OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 16),
+                                foregroundColor: Colors.orange.shade800,
+                                side: BorderSide(
+                                    color: Colors.orange.shade300, width: 1.4),
+                              ),
+                              onPressed: rec.pause,
+                              icon: const Icon(Icons.pause),
+                              label: const Text('暂停'),
+                            ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          backgroundColor: Colors.red,
+                        ),
+                        onPressed: rec.stop,
+                        icon: const Icon(Icons.stop),
+                        label: const Text('停止记录'),
+                      ),
+                    ),
+                  ],
+                )
+              else
+                FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                  onPressed: () => rec.start(),
+                  icon: const Icon(Icons.play_arrow),
+                  label: const Text('开始记录'),
                 ),
-                onPressed: recording ? rec.stop : () => rec.start(),
-                icon: Icon(recording ? Icons.stop : Icons.play_arrow),
-                label: Text(recording ? '停止记录' : '开始记录'),
-              ),
             ],
           ),
         ),
@@ -160,6 +202,7 @@ class _RecordScreenState extends State<RecordScreen> {
 
 class _StatusCard extends StatelessWidget {
   final bool recording;
+  final bool paused;
   final String? trackName;
   final DateTime? startTime;
   final double? speed;
@@ -170,6 +213,7 @@ class _StatusCard extends StatelessWidget {
 
   const _StatusCard({
     required this.recording,
+    this.paused = false,
     this.trackName,
     this.startTime,
     this.speed,
@@ -193,13 +237,25 @@ class _StatusCard extends StatelessWidget {
                 Icon(
                   recording ? Icons.circle : Icons.circle_outlined,
                   size: 14,
-                  color: recording ? Colors.red : cs.outline,
+                  color: recording
+                      ? Colors.red
+                      : paused
+                          ? Colors.orange
+                          : cs.outline,
                 ),
                 const SizedBox(width: 6),
                 Text(
-                  recording ? '记录中$sourceLabel' : '未在记录',
+                  recording
+                      ? '记录中$sourceLabel'
+                      : paused
+                          ? '已暂停$sourceLabel'
+                          : '未在记录',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: recording ? Colors.red : null,
+                        color: recording
+                            ? Colors.red
+                            : paused
+                                ? Colors.orange.shade800
+                                : null,
                       ),
                 ),
                 const Spacer(),
@@ -223,8 +279,12 @@ class _StatusCard extends StatelessWidget {
                 _Metric(label: '里程', value: formatDistance(distance)),
                 _Metric(
                   label: 'GPS',
-                  value: gpsDegraded ? '无信号' : '正常',
-                  valueColor: gpsDegraded ? Colors.orange : null,
+                  value: paused
+                      ? '已暂停'
+                      : gpsDegraded
+                          ? '无信号'
+                          : '正常',
+                  valueColor: paused || gpsDegraded ? Colors.orange : null,
                 ),
               ],
             ),

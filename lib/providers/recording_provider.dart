@@ -20,7 +20,7 @@ import 'settings_provider.dart';
 import 'tracks_provider.dart';
 
 /// 记录会话状态。
-enum RecordingState { idle, recording }
+enum RecordingState { idle, recording, paused }
 
 /// 记录编排中心：
 /// - 定位（自适应频率）→ 批量缓冲 → SQLite 事务写入；
@@ -64,6 +64,12 @@ class RecordingProvider extends ChangeNotifier {
   RecordingState _state = RecordingState.idle;
   RecordingState get state => _state;
   bool get isRecording => _state == RecordingState.recording;
+
+  /// 已暂停（记录未结束，定位与传感器已停，可继续）。
+  bool get isPaused => _state == RecordingState.paused;
+
+  /// 记录会话进行中（含暂停）：允许 stop / 蓝牙自动停等结算路径。
+  bool get isActive => _state != RecordingState.idle;
 
   Track? _currentTrack;
   Track? get currentTrack => _currentTrack;
@@ -120,11 +126,11 @@ class RecordingProvider extends ChangeNotifier {
     _btConnectionSub?.cancel();
     _btConnectionSub = events.listen((connected) {
       if (connected) {
-        if (!isRecording && settingsProvider.btAutoEnabled) {
+        if (!isActive && settingsProvider.btAutoEnabled) {
           start(source: 'bluetooth');
         }
       } else {
-        if (isRecording &&
+        if (isActive &&
             settingsProvider.btAutoEnabled &&
             _currentTrack?.source == 'bluetooth') {
           stop();
@@ -139,7 +145,7 @@ class RecordingProvider extends ChangeNotifier {
 
   /// 开始记录。[source]：manual / bluetooth。
   Future<bool> start({String source = 'manual'}) async {
-    if (isRecording) return true;
+    if (isActive) return true;
 
     final perm = await permissions.ensureRecordingPermissions();
     if (!perm.ok) {
@@ -198,9 +204,9 @@ class RecordingProvider extends ChangeNotifier {
     return true;
   }
 
-  /// 结束记录并结算。
+  /// 结束记录并结算（暂停中也可结束）。
   Future<void> stop() async {
-    if (!isRecording) return;
+    if (_state == RecordingState.idle) return;
 
     await _flush();
     AppLogger.i('record', '停止记录：${_currentTrack?.name ?? ''}，'
@@ -231,6 +237,32 @@ class RecordingProvider extends ChangeNotifier {
     _state = RecordingState.idle;
     notifyListeners();
     await tracks.refresh();
+  }
+
+  /// 暂停：定位与传感器停止（省电），轨迹保留，可随时 [resume]。
+  /// 暂停期间的定位点/事件不再记录；恢复后跨暂停段不计直线距离。
+  Future<void> pause() async {
+    if (_state != RecordingState.recording) return;
+    await _flush();
+    location.stop();
+    sensors.stop();
+    _currentSpeed = null;
+    _state = RecordingState.paused;
+    AppLogger.i('record', '记录已暂停（定位与传感器已停）');
+    notifyListeners();
+  }
+
+  /// 继续记录：同一条轨迹继续写入，定位频率从行驶档重新自适应。
+  Future<void> resume() async {
+    if (_state != RecordingState.paused) return;
+    // 跨暂停段不计直线距离：断开与暂停前末点的里程累算链
+    _lastWritten = null;
+    _lastFixAt = null;
+    location.start();
+    sensors.start();
+    _state = RecordingState.recording;
+    AppLogger.i('record', '记录已继续');
+    notifyListeners();
   }
 
   // ---------------------------------------------------------------------------

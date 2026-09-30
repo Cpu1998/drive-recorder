@@ -4,15 +4,22 @@ import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
+import android.content.ContentValues
 import android.content.Context
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.io.File
+import java.io.FileOutputStream
 
-class MainActivity : FlutterActivity() {
+open class MainActivity : FlutterActivity() {
     private companion object {
         const val FG_CHANNEL = "drive_recorder/foreground"
         const val BT_CHANNEL = "drive_recorder/bluetooth"
+        const val DL_CHANNEL = "drive_recorder/downloads"
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -50,6 +57,84 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+
+        // ---- 公共下载目录写入通道 ----
+        // media_store_plus 插件已停更，在 Android 16（SDK 36）上 saveFile
+        // 恒返回 null（用户实测「保存失败」）。这里自实现：Android 10+ 走
+        // MediaStore.Downloads 免权限插入；Android 9- 走遗留公共目录直写。
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, DL_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "saveFileToDownloads" -> {
+                        val filePath = call.argument<String>("filePath")
+                        val subDir = call.argument<String>("subDir") ?: "DriveRecorder"
+                        val mime = call.argument<String>("mime") ?: "application/octet-stream"
+                        if (filePath == null) {
+                            result.error("ARG", "filePath is null", null)
+                            return@setMethodCallHandler
+                        }
+                        try {
+                            val name = saveFileToDownloads(filePath, subDir, mime)
+                            result.success(name)
+                        } catch (e: Exception) {
+                            result.error("SAVE_FAILED", e.message ?: e.javaClass.simpleName, null)
+                        }
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+    }
+
+    /**
+     * 把本地文件复制到公共下载目录 Download/[subDir]/，返回实际落盘文件名
+     * （同名文件被系统自动重编号时与请求名不同）。
+     */
+    private fun saveFileToDownloads(filePath: String, subDir: String, mime: String): String {
+        val src = File(filePath)
+        if (!src.exists()) throw IllegalArgumentException("源文件不存在: $filePath")
+        val fileName = src.name
+
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val values = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                put(MediaStore.MediaColumns.MIME_TYPE, mime)
+                put(
+                    MediaStore.MediaColumns.RELATIVE_PATH,
+                    Environment.DIRECTORY_DOWNLOADS + "/" + subDir
+                )
+            }
+            val resolver = contentResolver
+            val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                ?: throw IllegalStateException("MediaStore insert 返回空")
+            try {
+                resolver.openOutputStream(uri)?.use { out ->
+                    src.inputStream().use { it.copyTo(out) }
+                } ?: throw IllegalStateException("打开输出流失败")
+            } catch (e: Exception) {
+                // 写入失败要清掉半成品行，避免留下 0 字节占位
+                runCatching { resolver.delete(uri, null, null) }
+                throw e
+            }
+            // 重名时系统会改名（如 name (1).gpx），查回真实文件名
+            var actual = fileName
+            runCatching {
+                resolver.query(uri, arrayOf(MediaStore.MediaColumns.DISPLAY_NAME), null, null, null)
+                    ?.use { c ->
+                        if (c.moveToFirst()) c.getString(0)?.let { actual = it }
+                    }
+            }
+            actual
+        } else {
+            @Suppress("DEPRECATION")
+            val dir = File(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                subDir
+            )
+            if (!dir.exists()) dir.mkdirs()
+            val dst = File(dir, fileName)
+            FileOutputStream(dst).use { out -> src.inputStream().use { it.copyTo(out) } }
+            fileName
+        }
     }
 
     /**

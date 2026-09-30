@@ -4,7 +4,6 @@ import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
-import 'package:media_store_plus/media_store_plus.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -14,6 +13,7 @@ import '../models/track_point.dart';
 import '../utils/constants.dart';
 import 'app_logger.dart';
 import 'database/app_database.dart';
+import 'downloads_saver.dart';
 
 /// 备份异常（导入格式不符/损坏等，面向用户展示 message）。
 class BackupException implements Exception {
@@ -194,15 +194,10 @@ class BackupService {
   Future<String?> saveToDownloads(File zipFile) async {
     if (!Platform.isAndroid) return null;
     try {
-      await MediaStore.ensureInitialized();
-      MediaStore.appFolder = 'DriveRecorder';
-      final info = await MediaStore().saveFile(
-        tempFilePath: zipFile.path,
-        dirType: DirType.download,
-        dirName: DirName.download,
+      return await DownloadsSaver.saveFileToDownloads(
+        filePath: zipFile.path,
+        mime: 'application/zip',
       );
-      if (info == null) return null;
-      return 'Download/DriveRecorder/${info.name}';
     } catch (e) {
       AppLogger.w('backup', '公共下载目录写入失败：$e');
       return null;
