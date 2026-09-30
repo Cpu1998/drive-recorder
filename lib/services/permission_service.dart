@@ -50,6 +50,36 @@ class PermissionService {
     }
     return const PermissionResult(ok: false, missing: ['相机']);
   }
+
+  // —— 息屏保活：电池优化豁免（Android 6+ Doze/App Standby 白名单）——
+  // 息屏后系统的 Doze/省电机制会推迟或限流后台定位回调，即使 App 持有
+  // location 前台服务也可能被厂商省电策略二次压制；授予「忽略电池优化」
+  // 可解除 Android 原生那一层限制（vivo 自家限制仍需系统设置手动放行，
+  // 由设置页引导文案说明）。
+
+  /// 「忽略电池优化」当前是否已授予。
+  /// 非 Android 平台无此概念，恒返回 true；查询失败（无平台通道的测试
+  /// 环境等）保守返回 false，由 UI 引导手动设置。
+  Future<bool> isIgnoringBatteryOptimizations() async {
+    if (!Platform.isAndroid) return true;
+    try {
+      return Permission.ignoreBatteryOptimizations.status.isGranted;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// 请求「忽略电池优化」（弹系统确认框；需 manifest 已声明
+  /// REQUEST_IGNORE_BATTERY_OPTIMIZATIONS）。返回是否已豁免。
+  Future<bool> requestIgnoreBatteryOptimizations() async {
+    if (!Platform.isAndroid) return true;
+    try {
+      final status = await Permission.ignoreBatteryOptimizations.request();
+      return status.isGranted;
+    } catch (_) {
+      return false;
+    }
+  }
 }
 
 @immutable

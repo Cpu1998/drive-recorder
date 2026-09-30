@@ -70,16 +70,22 @@ void main() {
     await tester.pumpWidget(_wrap(const SettingsScreen(), settings));
     await tester.pumpAndSettle();
 
+    // 首屏可见（v1.8.0 新增「息屏保活」区块，其下内容被顶低）：
+    // 急刹阈值与滑块默认值、忽略电池优化开关
     expect(find.text('急刹减速度阈值'), findsOneWidget);
+    expect(find.text('3.0 m/s²（持续 ≥500ms 触发；越大越不敏感）'),
+        findsOneWidget);
+    expect(find.text('忽略电池优化'), findsOneWidget);
+
+    // 碰撞阈值被顶出首屏，先滚到可见
+    await tester.scrollUntilVisible(find.text('碰撞加速度阈值'), 200,
+        scrollable: find.byType(Scrollable).first);
     expect(find.text('碰撞加速度阈值'), findsOneWidget);
+
     // 车机开关被顶出首屏（v1.3.0 设置页顶部新增 Key/日志入口），先滚到可见
     await tester.scrollUntilVisible(find.text('连上车机自动开始记录'), 200,
         scrollable: find.byType(Scrollable).first);
     expect(find.text('连上车机自动开始记录'), findsOneWidget);
-
-    // 滑块默认值展示（未滚动时可见，先断言）
-    expect(find.text('3.0 m/s²（持续 ≥500ms 触发；越大越不敏感）'),
-        findsOneWidget);
 
     // 同步开关在屏幕外，先滚动到可见
     await tester.scrollUntilVisible(

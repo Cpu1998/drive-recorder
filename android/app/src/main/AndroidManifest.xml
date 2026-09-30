@@ -27,6 +27,10 @@
         android:maxSdkVersion="30"/>
     <!-- 唤醒锁：保证熄屏后传感器采样与 30s 断连宽限期计时不被冻结（配合前台服务使用） -->
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <!-- 请求「忽略电池优化」豁免（Android 6+ Doze/App Standby 白名单）：
+         息屏后系统会推迟/限流后台定位回调，记录前在设置页引导用户授予；
+         声明本权限后才允许通过系统弹窗申请（仅 sideload 自用，不上架 Play） -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
     <!-- Android 9 及以下：GPX 导出写公共下载目录。Android 10+ 走 MediaStore 无需存储权限，
          本权限仅旧系统生效（maxSdkVersion=29）；API 29 另需下方 requestLegacyExternalStorage -->
     <uses-permission

@@ -25,21 +25,35 @@ class SettingsScreen extends StatefulWidget {
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
+class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObserver {
   final _permissions = PermissionService();
   final _amapKeyController = TextEditingController();
   bool _amapKeyEdited = false;
   bool _amapKeySynced = false;
   bool _backupBusy = false;
 
+  /// 「忽略电池优化」当前状态：null = 检查中，false = 未豁免（后台风险）。
+  bool? _batteryIgnored;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _amapKeyController.addListener(() => _amapKeyEdited = true);
+    _refreshBatteryOptimization();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // 从系统设置（如电池/自启动页）返回 App 时重查电池优化状态
+    if (state == AppLifecycleState.resumed) {
+      _refreshBatteryOptimization();
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _amapKeyController.dispose();
     super.dispose();
   }
@@ -52,6 +66,65 @@ class _SettingsScreenState extends State<SettingsScreen> {
       content: Text(key.isEmpty ? '已清除高德 Key，重启 App 后生效' : '已保存，重启 App 后生效'),
       duration: const Duration(seconds: 3),
     ));
+  }
+
+  // —— 息屏保活：忽略电池优化 ——
+
+  Future<void> _refreshBatteryOptimization() async {
+    final granted = await _permissions.isIgnoringBatteryOptimizations();
+    if (mounted) setState(() => _batteryIgnored = granted);
+  }
+
+  Future<void> _handleBatteryTap() async {
+    if (_batteryIgnored == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('已允许忽略电池优化，无需操作')));
+      return;
+    }
+    final granted = await _permissions.requestIgnoreBatteryOptimizations();
+    await _refreshBatteryOptimization();
+    if (!mounted) return;
+    if (granted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              '已允许：息屏后定位更稳定。vivo 手机建议再按引导检查自启动/后台高耗电'),
+          duration: Duration(seconds: 4)));
+    } else {
+      _showVivoPowerDialog(context);
+    }
+  }
+
+  /// 未授予电池优化豁免时：vivo（及通用 Android）后台限制的手动设置引导。
+  /// 这些是厂商自家省电策略，App 无法代开，只能引导用户去系统设置放行。
+  void _showVivoPowerDialog(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('息屏后定位不稳？'),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('「忽略电池优化」尚未授予（未弹窗、被拒绝或被系统拦截）。'
+                '除重试该开关外，vivo 手机的自家省电策略必须在系统设置手动放行：'),
+            SizedBox(height: 10),
+            Text('1. 自启动：设置 → 应用 → 应用管理 → 行车记录 → 自启动\n'
+                '   （部分机型：i管家 → 应用管理 → 自启动管理）'),
+            SizedBox(height: 6),
+            Text('2. 后台高耗电：设置 → 电池 → 后台耗电管理 → 行车记录 → '
+                '允许后台高耗电'),
+            SizedBox(height: 6),
+            Text('3. 可选：最近任务里下拉「行车记录」卡片，点锁图标锁定后台'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('知道了'),
+          ),
+        ],
+      ),
+    );
   }
 
   // —— 数据备份：导出 / 导入 ——
@@ -225,6 +298,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context)
                 .push(MaterialPageRoute(builder: (_) => const LogScreen())),
+          ),
+          const Divider(),
+
+          // —— 息屏保活 ——
+          _sectionHeader(context, '息屏保活（后台定位）'),
+          ListTile(
+            leading: const Icon(Icons.battery_saver_outlined),
+            title: const Text('忽略电池优化'),
+            subtitle: Text(
+              switch (_batteryIgnored) {
+                null => '正在检查…',
+                true => '已允许：记录中息屏时，系统 Doze 省电机制不会冻结定位回调',
+                false => '未允许：息屏后系统省电策略可能延迟/掐断定位（息屏丢轨迹常见原因）\n'
+                    '点击申请系统豁免；vivo 手机另需手动放行自启动/后台高耗电',
+              },
+              style: const TextStyle(fontSize: 12),
+            ),
+            isThreeLine: true,
+            trailing: _batteryIgnored == null
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : Icon(
+                    _batteryIgnored!
+                        ? Icons.check_circle
+                        : Icons.error_outline,
+                    color: _batteryIgnored!
+                        ? Colors.green
+                        : Theme.of(context).colorScheme.error,
+                  ),
+            onTap: _handleBatteryTap,
           ),
           const Divider(),
 

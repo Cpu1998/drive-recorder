@@ -62,9 +62,9 @@ abstract class ContinuousLocator {
   Future<void> dispose();
 }
 
-/// 系统定位提供方（geolocator：Android 自动选择
-/// FusedLocationProvider / LocationManager；不依赖高德 Key 与网络，
-/// 纯 GPS 也可工作）。
+/// 系统定位提供方（geolocator AndroidSettings.forceLocationManager = true：
+/// 走系统 LocationManager，不经 Google Play 服务，纯 GPS 也可工作；
+/// 不依赖高德 Key 与网络）。
 ///
 /// 坐标系：geolocator 输出 WGS-84，本类在出口处统一转换为 GCJ-02
 /// （与高德 SDK / 高德底图一致），下游存储、里程、绘制、GPX 全链路
@@ -93,6 +93,35 @@ class SystemLocator implements ContinuousLocator {
         accuracy: LocationAccuracy.best,
         intervalDuration: Duration(milliseconds: _intervalMs),
         distanceFilter: 0,
+        // —— 息屏丢点修复：绕开 GMS 的 FusedLocationProviderClient ——
+        //
+        // 默认（false）时 geolocator 走 Google Play 服务的
+        // FusedLocationProviderClient。它自带省电启发式：判定 App 处于
+        // 后台/息屏态时会主动降频、批处理甚至长时间不发点（在 vivo/OPPO/
+        // 小米等激进省电 ROM 上尤甚，geolocator 上游 issue #1091/#1215 同因）
+        // ——表现为「熄屏后轨迹断续/停滞」，即本次要修的问题。前台服务与
+        // WakeLock 均挡不住这一层：限流发生在 GMS 客户端内部，与进程
+        // 是否存活无关。
+        //
+        // forceLocationManager: true 改走系统 LocationManager
+        // （geolocator_android 5.x 在 Android 12+ 优先
+        // LocationManager.FUSED_PROVIDER，退而 GPS_PROVIDER、NETWORK_PROVIDER），
+        // 完全不经 GMS，采样节奏由 intervalDuration 直接决定、可预期，
+        // 不受 GMS 后台限流影响。
+        //
+        // 代价：失去 GMS 的传感器融合（室内/城市峡谷收敛略慢），对以户外
+        // 行车为主的场景可接受；且 LocationManager 仍支持 fused Provider
+        //（系统级混合源），实际损失比“纯 GPS”更小。
+        forceLocationManager: true,
+        //
+        // 不设 foregroundNotificationConfig：若设置，geolocator 会再起
+        // 一个自带 location 前台服务并常驻通知，与 App 自有
+        // ForegroundService（同样 foregroundServiceType=location，见
+        // ForegroundService.kt）叠出双常驻通知。自有服务与定位流同进程，
+        // 已满足「带 location 前台服务的进程可后台连续收点」的系统条件，
+        // 故采用：自有前台服务保活 + geolocator 纯流订阅，不重复。
+        //（geolocator 14 的 AndroidSettings 已无 enforceStrictMode 参数，
+        // 该参数自 v10 起移除，无后台模式开关可调。）
       ),
     ).listen(_onPosition, onError: (Object e) {
       _fixes.add(LocationFix(

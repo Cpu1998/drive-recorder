@@ -19,8 +19,8 @@ enum LocationRuntime {
 
 typedef LocatorFactory = ContinuousLocator Function();
 
-/// 定位编排中心：系统定位（geolocator：FusedLocationProvider / GPS）+
-/// 行驶/静止自适应频率 + 停滞看门狗。
+/// 定位编排中心：系统定位（geolocator：系统 LocationManager，绕开 GMS
+/// 息屏限流）+ 行驶/静止自适应频率 + 停滞看门狗。
 ///
 /// 不再使用高德定位 SDK：不依赖高德 Key 与网络，纯 GPS 即可出点。
 ///
