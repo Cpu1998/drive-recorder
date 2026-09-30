@@ -69,8 +69,8 @@ class TrackMapView extends StatefulWidget {
 
 class _TrackMapViewState extends State<TrackMapView> {
   bool _privacyAgreed = false;
-  bool _mapReady = false;
   bool _privacyChecked = false;
+  amap.AMapController? _mapController;
   Timer? _overlaysSettledTimer;
 
   @override
@@ -191,8 +191,8 @@ class _TrackMapViewState extends State<TrackMapView> {
               const Text('该轨迹没有定位点'),
               const SizedBox(height: 4),
               Text(
-                '可能原因：未配置高德 Android Key（定位服务不可用），'
-                '或全程无 GPS 信号。\n配置方法见 README「高德 Key 配置」。',
+                '可能原因：记录时无 GPS 信号（隧道/室内/定位服务未开启）。\n'
+                '定位使用手机系统 GPS，请在系统设置中确认定位已开启。',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                     fontSize: 12, color: Theme.of(context).disabledColor),
@@ -242,33 +242,62 @@ class _TrackMapViewState extends State<TrackMapView> {
       const AMapPrivacyStatement(hasContains: true, hasShow: true, hasAgree: true),
     );
 
-    // 修复：标记与轨迹线在地图原生引擎就绪前创建会触发
-    // native 崩溃/NPE（amap_map 经 creationParams 在 factory.create
-    // 阶段（引擎构造后毫秒级）同步处理 markersToAdd/polylinesToAdd，
-    // 此时引擎未就绪）。改为 onMapCreated 之后再挂载
-    // （分别走 markers#update / polylines#update 通道）。
-    final markers = _mapReady ? _markers.toSet() : const <amap.Marker>{};
-    final polylines = _mapReady
-        ? {_polyline}
-        : const <amap.Polyline>{};
+    // 轨迹线与标记随地图创建参数直接携带（与 flutter_mapapp 同款、
+    // 同机型验证过的模式）。不挂在 onMapCreated 之后：实测部分机型
+    // （vivo Android 16）该回调不触发，导致轨迹线永远挂不上去（
+    // 「看不到线」的根因）；创建参数路径在原生侧同步处理，不依赖回调。
+    final markers = _markers.toSet();
+    final polylines = {_polyline};
     CrashSentinel.mark('map_build（创建地图原生视图）');
     return amap.AMapWidget(
       initialCameraPosition: _initialCamera,
       markers: markers,
       polylines: polylines,
-      onMapCreated: (_) {
+      onMapCreated: (controller) {
+        _mapController = controller;
         AppLogger.i('map', '地图原生视图已创建（onMapCreated 回调到达）');
-        CrashSentinel.mark('map_overlays（挂载轨迹线与事件标记）');
-        setState(() => _mapReady = true);
-        AppLogger.i('map', '地图就绪，挂载轨迹线与 ${_markers.length} 个事件标记'
-            '（走 update 通道，避开引擎未就绪窗口）');
-        // 覆盖物挂载后存活 2 秒即视为安全过关，清除哨兵
+        CrashSentinel.mark('map_overlays（轨迹线与事件标记随地图创建携带）');
+        _fitCamera();
+        // 创建后存活 2 秒即视为安全过关，清除哨兵
         _overlaysSettledTimer?.cancel();
         _overlaysSettledTimer = Timer(const Duration(seconds: 2), () {
           CrashSentinel.clear();
-          AppLogger.i('map', '轨迹线与标记挂载完成，地图阶段结束');
+          AppLogger.i('map', '轨迹线与标记渲染完成，地图阶段结束');
         });
       },
     );
+  }
+
+  /// 视野适配到轨迹包围盒（回调不触发的机型由 initialCamera 兑底居中）。
+  Future<void> _fitCamera() async {
+    final located = widget.points.where((p) => p.hasFix).toList();
+    if (located.isEmpty) return;
+    final controller = _mapController;
+    if (controller == null) return;
+    var minLat = located.first.latitude!, maxLat = minLat;
+    var minLon = located.first.longitude!, maxLon = minLon;
+    for (final p in located) {
+      minLat = p.latitude! < minLat ? p.latitude! : minLat;
+      maxLat = p.latitude! > maxLat ? p.latitude! : maxLat;
+      minLon = p.longitude! < minLon ? p.longitude! : minLon;
+      maxLon = p.longitude! > maxLon ? p.longitude! : maxLon;
+    }
+    try {
+      if (minLat == maxLat && minLon == maxLon) {
+        await controller.moveCamera(
+            amap.CameraUpdate.newLatLngZoom(LatLng(minLat, minLon), 16));
+      } else {
+        await controller.moveCamera(amap.CameraUpdate.newLatLngBounds(
+          LatLngBounds(
+            southwest: LatLng(minLat, minLon),
+            northeast: LatLng(maxLat, maxLon),
+          ),
+          64,
+        ));
+      }
+    } catch (e) {
+      // 视野适配失败不影响轨迹线展示（创建参数已携带）
+      AppLogger.w('map', '视野适配失败（忽略，不影响轨迹线）：$e');
+    }
   }
 }

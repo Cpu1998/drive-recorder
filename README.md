@@ -53,7 +53,7 @@ android/app/src/main/kotlin/com/zhangkeyou/drive_recorder/
 └── ForegroundService.kt         # location 类型前台服务 + WakeLock
 ```
 
-## 2. 高德 Key 配置（必做）
+## 2. 高德 Key 配置（仅地图底图，可选）
 
 Android 包名：`com.zhangkeyou.drive_recorder`。当前发布包签名用的是调试证书，
 SHA1：`6E:34:F4:6E:3A:56:B6:6C:BB:E0:4F:FA:D1:8C:DF:26:2A:F3:4E:49`。
@@ -65,7 +65,7 @@ SHA1：`6E:34:F4:6E:3A:56:B6:6C:BB:E0:4F:FA:D1:8C:DF:26:2A:F3:4E:49`。
    - SHA1：上面给出的指纹
 2. 打开 App → 设置 → 「高德地图 Key」→ 粘贴 Key → 保存 → 重启 App。
 
-> 地图 Key 在地图创建时注入，定位 Key 在 App 启动时注入，所以需要重启一次。
+> Key 只影响地图底图显示；**定位自 v1.6.0 起改用手机系统 GPS**，不依赖高德 Key 与网络。
 
 ### 方式二：打包时写死（开发者）
 
@@ -148,15 +148,14 @@ SHA1：`6E:34:F4:6E:3A:56:B6:6C:BB:E0:4F:FA:D1:8C:DF:26:2A:F3:4E:49`。
 - GPX 保存失败自动回落（应用目录 + 分享面板）
 - 新增全量备份导入/导出（标准 ZIP，见上文「全量备份与恢复」）
 
-### 定位降级自愈（v1.4.0）
-安卓端“高德突然无定位点”的自愈阶梯（`lib/services/location_service.dart`）：
-1. 看门狗每 5s 体检：高德超过「当前间隔+20s」无任何回调，或连续 3 次报错
-   → 重建高德客户端（换新插件实例，清除原生侧残留状态），最多 2 次；
-2. 重建后仍停滞/报错 → 自动降级到系统定位（geolocator，走
-   FusedLocationProvider/LocationManager，不依赖高德 Key），轨迹点继续入库；
-3. 降级期间按 120s→×2→封顶 900s 退避周期悄悄探测高德，拿到第一个正常点
-   即自动切回并停掉系统流；记录页 GPS 指标实时显示（正常/恢复中/兜底/无信号）。
-降级决策全部写入应用内日志（tag=location），可在设置→运行日志里直接看。
+### 定位（v1.6.0：系统 GPS，不再使用高德定位）
+- 定位链路改为**手机系统定位**（geolocator：FusedLocationProvider /
+  LocationManager），不依赖高德 Key 与网络，纯 GPS 即可出点；
+- 看门狗每 5s 体检：超过「当前间隔 + 宽限」无任何回调 → 重建定位流；
+- 行驶/静止自适应频率保留：行驶 2s / 静止 30s；
+- 坐标系：系统定位输出 WGS-84，入库前统一转 GCJ-02（与高德底图对齐，
+  与旧版高德轨迹数据一致）；境外坐标不转换。
+运行过程写入应用内日志（tag=location），可在设置→运行日志里直接看。
 
 
 ### v1.2.0 稳定性修复

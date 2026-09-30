@@ -8,7 +8,6 @@ import 'providers/recording_provider.dart';
 import 'providers/settings_provider.dart';
 import 'providers/tracks_provider.dart';
 import 'services/bluetooth_car_service.dart';
-import 'package:amap_flutter_location/amap_flutter_location.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 
 import 'services/app_logger.dart';
@@ -59,16 +58,6 @@ Future<void> main() async {
       address: settings.btDeviceAddress!,
     );
   }
-  // 高德定位 Key：设置页配置的 Key 在启动时注入定位 SDK（SDK 限制：
-  // 只能在创建定位客户端前设置，故放启动路径；地图 Key 则在地图组件内注入）
-  final amapKey = settings.amapKey;
-  if (amapKey.isNotEmpty) {
-    AMapFlutterLocation.setApiKey(amapKey, '');
-    AppLogger.i('key', '定位 Key 已注入：${AppLogger.maskKey(amapKey)}');
-  } else {
-    AppLogger.w('key', '未配置高德 Key（设置页可填），使用打包内置 Key');
-  }
-
   bluetooth.autoEnabled = settings.btAutoEnabled;
   try {
     await bluetooth.start();
@@ -79,7 +68,7 @@ Future<void> main() async {
   }
   recording.attachBluetoothEvents(bluetooth.connectionEvents);
 
-  // 首次启动种入示例轨迹（无高德 Key 时定位不可用，示例保证详情页可体验）
+  // 首次启动种入示例轨迹（保证详情页/地图可体验；定位已改系统 GPS，不依赖 Key）
   final seeded = await SampleTrackSeeder(db, prefs).seedIfNeeded();
   AppLogger.i('sample', seeded ? '已种入示例轨迹（可删除）' : '未种入示例轨迹（已种过或已有轨迹）');
 

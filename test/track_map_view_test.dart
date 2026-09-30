@@ -25,7 +25,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('该轨迹没有定位点'), findsOneWidget);
-    expect(find.textContaining('高德 Android Key'), findsOneWidget);
+    expect(find.textContaining('无 GPS 信号'), findsOneWidget);
     expect(find.byType(AlertDialog), findsNothing,
         reason: '无地图可初始化，不应弹隐私弹窗');
     expect(tester.takeException(), isNull);

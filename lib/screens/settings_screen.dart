@@ -49,7 +49,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await context.read<SettingsProvider>().setAmapKey(key);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(key.isEmpty ? '已清除高德 Key，重启 App 后生效' : '已保存，重启 App 后生效（定位 SDK 需启动时注入）'),
+      content: Text(key.isEmpty ? '已清除高德 Key，重启 App 后生效' : '已保存，重启 App 后生效'),
       duration: const Duration(seconds: 3),
     ));
   }
@@ -207,9 +207,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  '不填则用打包内置的占位 Key（地图/定位不可用）。\n'
-                  '申请：console.amap.com → 创建应用 → 添加 Android Key，\n'
-                  '包名 com.zhangkeyou.drive_recorder，SHA1 与包名见 README。\n'
+                  '仅影响地图底图（定位已改用手机系统 GPS，不依赖 Key）。'
+                  '不填则用打包内置的占位 Key（地图可能不可用）。'
+                  '申请：console.amap.com → 创建应用 → 添加 Android Key，'
+                  '包名 com.zhangkeyou.drive_recorder，SHA1 与包名见 README。'
                   '保存后需重启 App 生效。',
                   style: TextStyle(
                       fontSize: 12, color: Theme.of(context).disabledColor),

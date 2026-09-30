@@ -223,56 +223,15 @@ class _StatusCard extends StatelessWidget {
                 _Metric(label: '里程', value: formatDistance(distance)),
                 _Metric(
                   label: 'GPS',
-                  value: _gpsValue,
-                  valueColor: _gpsColor,
+                  value: gpsDegraded ? '无信号' : '正常',
+                  valueColor: gpsDegraded ? Colors.orange : null,
                 ),
               ],
             ),
-            if (locationRuntime == LocationRuntime.system) ...[
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Icon(Icons.alt_route_rounded,
-                      size: 16, color: Colors.blue.shade700),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      '高德定位异常，已切系统定位兜底记录（恢复后自动切回）',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Colors.blue.shade700,
-                          ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
           ],
         ),
       ),
     );
-  }
-  String get _gpsValue {
-    if (gpsDegraded) return '无信号';
-    switch (locationRuntime) {
-      case LocationRuntime.system:
-        return '兜底';
-      case LocationRuntime.amapRecovering:
-        return '恢复中';
-      default:
-        return '正常';
-    }
-  }
-
-  Color? get _gpsColor {
-    if (gpsDegraded) return Colors.orange;
-    switch (locationRuntime) {
-      case LocationRuntime.system:
-        return Colors.blue.shade700;
-      case LocationRuntime.amapRecovering:
-        return Colors.orange;
-      default:
-        return null;
-    }
   }
 }
 

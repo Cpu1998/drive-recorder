@@ -32,8 +32,6 @@ jobs:
       - name: Pub get
         run: flutter pub get
 
-      - name: Patch amap_flutter_location for AMapLocation 2.9.0
-        run: python3 tools/patch_amap_ios.py
 
       - name: Disable Swift Package Manager (avoid CocoaPods duplicate symbols)
         run: flutter config --no-enable-swift-package-manager

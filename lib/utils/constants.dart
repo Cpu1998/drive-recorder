@@ -32,28 +32,16 @@ class LocationTuning {
   /// 连续低速定位次数达到该值后切换到静止频率（滞回防抖）
   static const stationaryConfirmCount = 3;
 
-  // —— 定位降级阶梯参数 ——
-
-  /// 高德停滞自愈：重建客户端次数上限，超过后降级系统定位
-  static const amapMaxRestarts = 2;
+  // —— 看门狗参数 ——
 
   /// 停滞宽限期：超过「当前间隔 + 该值」仍无任何回调即判停滞
   static const stallGraceMs = 20000;
 
-  /// 回升探测窗口：降级期间高德探测在此时间内无回调即判失败
-  static const probeStallMs = 30000;
-
-  /// 连续定位错误达到该次数即触发自愈（重建/降级）
-  static const amapErrorThreshold = 3;
+  /// GPS 冷启动等极端场景的额外宽限（首次定位可能 30-60s）
+  static const stallExtraGraceMs = 20000;
 
   /// 看门狗检查周期
   static const healthTickMs = 5000;
-
-  /// 降级后回升高德的首次探测延迟，之后 ×2 退避
-  static const escalateFirstMs = 120000;
-
-  /// 回升探测退避封顶
-  static const escalateMaxMs = 900000;
 }
 
 /// 驾驶事件检测默认参数（设置页可调两项阈值）。
