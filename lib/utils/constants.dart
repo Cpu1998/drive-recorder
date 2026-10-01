@@ -11,6 +11,9 @@ class PrefKeys {
   static const syncEnabled = 'sync_enabled';
   static const amapPrivacyAgreed = 'amap_privacy_agreed';
 
+  /// 定位记录时的屏幕策略（ScreenPolicy.name）。
+  static const screenPolicy = 'screen_policy';
+
   /// 高德 Android Key（App 内配置，运行时注入地图/定位 SDK）。
   static const amapKey = 'amap_android_key';
 }
@@ -71,6 +74,27 @@ class BluetoothTuning {
   static const pollInterval = Duration(seconds: 5);
 }
 
+/// 定位记录进行中的屏幕策略（设置页三选一）。
+enum ScreenPolicy {
+  /// 系统默认：行为不变，按系统超时正常熄屏。
+  system,
+
+  /// 保持常亮：记录中持有屏幕 WakeLock（FLAG_KEEP_SCREEN_ON），不熄屏。
+  keepOn,
+
+  /// 假熄屏（黑屏保活）：记录中自动进入全黑覆盖层，系统保持唤醒；
+  /// 点按可临时退出黑屏，记录页可随时再进入。
+  fakeOff,
+}
+
+/// 解析持久化的屏幕策略值；未知/缺失回落 [ScreenPolicy.system]。
+ScreenPolicy screenPolicyFromName(String? name) {
+  for (final p in ScreenPolicy.values) {
+    if (p.name == name) return p;
+  }
+  return ScreenPolicy.system;
+}
+
 /// 高德 Key（占位符；Android 端实际读取 AndroidManifest.xml 的 meta-data，
 /// iOS 端读取 Info.plist 的 com.amap.api.ioskey，无需在此配置）。
 class AMapKeys {
@@ -83,5 +107,5 @@ class AMapKeys {
 
 /// 应用版本（与 pubspec version 同步维护；用于启动日志等展示）。
 class AppInfo {
-  static const String version = '1.8.0';
+  static const String version = '1.9.0';
 }

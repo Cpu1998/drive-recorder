@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'screens/detail_screen.dart';
 import 'screens/history_screen.dart';
 import 'screens/record_screen.dart';
+import 'widgets/fake_off_overlay.dart';
 
 /// App 外壳：MaterialApp + 底部导航（记录 / 历史 / 详情）。
 class DriveRecorderAppView extends StatelessWidget {
@@ -24,6 +25,8 @@ class DriveRecorderAppView extends StatelessWidget {
         brightness: Brightness.dark,
       ),
       home: const HomeShell(),
+      builder: (context, child) =>
+          ScreenPolicyHost(child: child ?? const SizedBox.shrink()),
     );
   }
 }
@@ -56,7 +59,9 @@ class _HomeShellState extends State<HomeShell> {
         index: _index,
         children: [
           for (var i = 0; i < _tabs.length; i++)
-            (i == 0 || _visited.contains(i)) ? _tabs[i] : const SizedBox.shrink(),
+            (i == 0 || _visited.contains(i))
+                ? _tabs[i]
+                : const SizedBox.shrink(),
         ],
       ),
       bottomNavigationBar: NavigationBar(

@@ -12,7 +12,7 @@ class SettingsProvider extends ChangeNotifier {
   final SyncService _sync;
 
   SettingsProvider(this._settings, [SyncService? sync])
-      : _sync = sync ?? FirestoreSyncServiceImpl() {
+    : _sync = sync ?? FirestoreSyncServiceImpl() {
     _load();
   }
 
@@ -35,6 +35,10 @@ class SettingsProvider extends ChangeNotifier {
   String _amapKey = '';
   String get amapKey => _amapKey;
 
+  // —— 定位时屏幕 ——
+  ScreenPolicy _screenPolicy = ScreenPolicy.system;
+  ScreenPolicy get screenPolicy => _screenPolicy;
+
   // —— 同步 ——
   bool _syncEnabled = false;
   bool get syncEnabled => _syncEnabled;
@@ -50,7 +54,14 @@ class SettingsProvider extends ChangeNotifier {
     _btDeviceAddress = _settings.btDeviceAddress;
     _syncEnabled = _settings.syncEnabled;
     _amapKey = _settings.amapKey;
+    _screenPolicy = _settings.screenPolicy;
     notifyListeners();
+  }
+
+  Future<void> setScreenPolicy(ScreenPolicy v) async {
+    _screenPolicy = v;
+    notifyListeners();
+    await _settings.setScreenPolicy(v);
   }
 
   Future<void> setBrakingThreshold(double v) async {
@@ -95,7 +106,8 @@ class SettingsProvider extends ChangeNotifier {
   Future<bool> setSyncEnabled(bool v) async {
     if (v) {
       if (!await _sync.isConfigured()) {
-        _syncError = 'Firebase 未配置：请按 README 完成 flutterfire configure 与 '
+        _syncError =
+            'Firebase 未配置：请按 README 完成 flutterfire configure 与 '
             'google-services.json 接入后重试';
         notifyListeners();
         return false;

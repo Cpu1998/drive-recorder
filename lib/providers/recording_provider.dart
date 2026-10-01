@@ -12,6 +12,7 @@ import '../services/foreground_service.dart';
 import '../services/location_service.dart';
 import '../services/permission_service.dart';
 import '../services/photo_service.dart';
+import '../services/screen_policy_controller.dart';
 import '../services/sensor_service.dart';
 import '../services/settings_service.dart';
 import '../utils/formatters.dart';
@@ -37,6 +38,9 @@ class RecordingProvider extends ChangeNotifier {
   final PermissionService permissions;
   final PhotoService photos;
 
+  /// 屏幕策略执行器（记录状态 → wakelock / 假熄屏覆盖层）。
+  final ScreenPolicyController screen;
+
   RecordingProvider({
     required this.db,
     required this.settings,
@@ -47,15 +51,23 @@ class RecordingProvider extends ChangeNotifier {
     ForegroundServiceController? foregroundService,
     PermissionService? permissionService,
     PhotoService? photoService,
-  })  : location = locationService ?? LocationService(),
-        photos = photoService ?? PhotoService(),
-        sensors = sensorService ??
-            SensorService(detector: DrivingEventDetector(
-              brakingThreshold: settings.brakingThreshold,
-              collisionThreshold: settings.collisionThreshold,
-            )),
-        foreground = foregroundService ?? ForegroundServiceController(),
-        permissions = permissionService ?? PermissionService();
+    ScreenPolicyController? screenPolicyController,
+  }) : location = locationService ?? LocationService(),
+       photos = photoService ?? PhotoService(),
+       sensors =
+           sensorService ??
+           SensorService(
+             detector: DrivingEventDetector(
+               brakingThreshold: settings.brakingThreshold,
+               collisionThreshold: settings.collisionThreshold,
+             ),
+           ),
+       foreground = foregroundService ?? ForegroundServiceController(),
+       permissions = permissionService ?? PermissionService(),
+       screen = screenPolicyController ?? ScreenPolicyController() {
+    // 记录中改设置（如切换屏幕策略）时立即生效
+    settingsProvider.addListener(_onSettingsChanged);
+  }
 
   final SettingsProvider settingsProvider;
   final TracksProvider tracks;
@@ -84,7 +96,8 @@ class RecordingProvider extends ChangeNotifier {
   bool get hasGpsFix => location.lastFix?.isOk == true;
 
   bool get gpsDegraded =>
-      isRecording && (_lastFixAt == null ||
+      isRecording &&
+      (_lastFixAt == null ||
           DateTime.now().difference(_lastFixAt!) > const Duration(seconds: 30));
 
   /// 定位链路运行状态（高德正常/恢复中/系统兜底），供 UI 展示。
@@ -200,6 +213,7 @@ class RecordingProvider extends ChangeNotifier {
 
     _state = RecordingState.recording;
     _statusMessage = null;
+    await _syncScreenPolicy();
     notifyListeners();
     return true;
   }
@@ -209,8 +223,11 @@ class RecordingProvider extends ChangeNotifier {
     if (_state == RecordingState.idle) return;
 
     await _flush();
-    AppLogger.i('record', '停止记录：${_currentTrack?.name ?? ''}，'
-        '点数 ${_currentTrack?.pointCount ?? 0}，事件 ${_currentTrack?.eventCount ?? 0}');
+    AppLogger.i(
+      'record',
+      '停止记录：${_currentTrack?.name ?? ''}，'
+          '点数 ${_currentTrack?.pointCount ?? 0}，事件 ${_currentTrack?.eventCount ?? 0}',
+    );
     location.stop();
     sensors.stop();
     await _fixSub?.cancel();
@@ -235,6 +252,7 @@ class RecordingProvider extends ChangeNotifier {
     }
 
     _state = RecordingState.idle;
+    await _syncScreenPolicy();
     notifyListeners();
     await tracks.refresh();
   }
@@ -249,6 +267,7 @@ class RecordingProvider extends ChangeNotifier {
     _currentSpeed = null;
     _state = RecordingState.paused;
     AppLogger.i('record', '记录已暂停（定位与传感器已停）');
+    await _syncScreenPolicy();
     notifyListeners();
   }
 
@@ -262,7 +281,27 @@ class RecordingProvider extends ChangeNotifier {
     sensors.start();
     _state = RecordingState.recording;
     AppLogger.i('record', '记录已继续');
+    await _syncScreenPolicy();
     notifyListeners();
+  }
+
+  // ---------------------------------------------------------------------------
+  // 屏幕策略（防熄屏/假熄屏）
+  // ---------------------------------------------------------------------------
+
+  /// 记录状态变化（或设置变化）时同步屏幕策略：
+  /// 记录中按策略持有 wakelock / 进入黑屏；暂停、停止、空闲则全释放。
+  Future<void> _syncScreenPolicy() async {
+    await screen.applyRecordingState(
+      _state == RecordingState.recording,
+      settingsProvider.screenPolicy,
+    );
+  }
+
+  /// 设置变化回调：记录进行中切策略时立即生效（如切到「保持常亮」）。
+  void _onSettingsChanged() {
+    if (!isActive) return;
+    unawaited(_syncScreenPolicy());
   }
 
   // ---------------------------------------------------------------------------
@@ -341,15 +380,17 @@ class RecordingProvider extends ChangeNotifier {
 
     final fix = location.lastFix;
     final now = DateTime.now();
-    await db.insertEvent(DriveEvent(
-      trackId: track!.id!,
-      timestamp: now,
-      type: DriveEventType.manual,
-      latitude: fix?.latitude,
-      longitude: fix?.longitude,
-      degraded: fix == null || !fix.isOk,
-      note: fix == null || !fix.isOk ? '无定位信号' : null,
-    ));
+    await db.insertEvent(
+      DriveEvent(
+        trackId: track!.id!,
+        timestamp: now,
+        type: DriveEventType.manual,
+        latitude: fix?.latitude,
+        longitude: fix?.longitude,
+        degraded: fix == null || !fix.isOk,
+        note: fix == null || !fix.isOk ? '无定位信号' : null,
+      ),
+    );
     _manualEvents++;
     notifyListeners();
     return true;
@@ -365,16 +406,18 @@ class RecordingProvider extends ChangeNotifier {
     final dest = await photos.persist(sourcePath, track!.id!, now);
 
     final fix = location.lastFix;
-    await db.insertEvent(DriveEvent(
-      trackId: track.id!,
-      timestamp: now,
-      type: DriveEventType.photo,
-      latitude: fix?.latitude,
-      longitude: fix?.longitude,
-      degraded: fix == null || !fix.isOk,
-      note: fix == null || !fix.isOk ? '无定位信号' : null,
-      photoPath: dest,
-    ));
+    await db.insertEvent(
+      DriveEvent(
+        trackId: track.id!,
+        timestamp: now,
+        type: DriveEventType.photo,
+        latitude: fix?.latitude,
+        longitude: fix?.longitude,
+        degraded: fix == null || !fix.isOk,
+        note: fix == null || !fix.isOk ? '无定位信号' : null,
+        photoPath: dest,
+      ),
+    );
     _photoEvents++;
     notifyListeners();
     return true;
@@ -395,15 +438,17 @@ class RecordingProvider extends ChangeNotifier {
       final merged = await db.mergeEventPeak(recent!, e.peakIntensity.abs());
       _recentEvents[e.type] = merged;
     } else {
-      final inserted = await db.insertEvent(DriveEvent(
-        trackId: track.id!,
-        timestamp: e.timestamp,
-        type: e.type,
-        peakIntensity: e.peakIntensity,
-        latitude: lat,
-        longitude: lon,
-        degraded: lat == null || lon == null,
-      ));
+      final inserted = await db.insertEvent(
+        DriveEvent(
+          trackId: track.id!,
+          timestamp: e.timestamp,
+          type: e.type,
+          peakIntensity: e.peakIntensity,
+          latitude: lat,
+          longitude: lon,
+          degraded: lat == null || lon == null,
+        ),
+      );
       _recentEvents[e.type] = inserted;
       _sensorEvents++;
       notifyListeners();
@@ -412,11 +457,13 @@ class RecordingProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    settingsProvider.removeListener(_onSettingsChanged);
     _fixSub?.cancel();
     _runtimeSub?.cancel();
     _sensorEventSub?.cancel();
     _btConnectionSub?.cancel();
     _flushTimer?.cancel();
+    unawaited(screen.releaseAll());
     super.dispose();
   }
 }

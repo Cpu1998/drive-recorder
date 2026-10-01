@@ -12,14 +12,12 @@ class SettingsService {
 
   // —— 阈值 ——
   double get brakingThreshold =>
-      prefs.getDouble(PrefKeys.brakingThreshold) ??
-      3.0;
+      prefs.getDouble(PrefKeys.brakingThreshold) ?? 3.0;
   Future<void> setBrakingThreshold(double v) =>
       prefs.setDouble(PrefKeys.brakingThreshold, v);
 
   double get collisionThreshold =>
-      prefs.getDouble(PrefKeys.collisionThreshold) ??
-      60.0;
+      prefs.getDouble(PrefKeys.collisionThreshold) ?? 60.0;
   Future<void> setCollisionThreshold(double v) =>
       prefs.setDouble(PrefKeys.collisionThreshold, v);
 
@@ -41,10 +39,15 @@ class SettingsService {
     await prefs.remove(PrefKeys.btDeviceAddress);
   }
 
+  // —— 定位时屏幕 ——
+  ScreenPolicy get screenPolicy =>
+      screenPolicyFromName(prefs.getString(PrefKeys.screenPolicy));
+  Future<void> setScreenPolicy(ScreenPolicy v) =>
+      prefs.setString(PrefKeys.screenPolicy, v.name);
+
   // —— 云同步 ——
   bool get syncEnabled => prefs.getBool(PrefKeys.syncEnabled) ?? false;
-  Future<void> setSyncEnabled(bool v) =>
-      prefs.setBool(PrefKeys.syncEnabled, v);
+  Future<void> setSyncEnabled(bool v) => prefs.setBool(PrefKeys.syncEnabled, v);
 
   // —— 高德 Key（App 内配置）——
   String get amapKey => prefs.getString(PrefKeys.amapKey) ?? '';
